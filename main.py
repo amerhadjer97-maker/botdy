@@ -1,36 +1,42 @@
 import telebot
-from telebot import types
-from PIL import Image
-import io
-import os
+from flask import Flask
 
-# Telegram Token
-TOKEN = "7996482415:AAFZh4E-ivoOhRi8s_6Vg2qKvATOhAm54ek"
+# ضع التوكن الخاص بك هنا 👇
+BOT_TOKEN = "7996482415:AAFZh4E-ivoOhRi8s_6Vg2qKvATOhAm54ek"
+bot = telebot.TeleBot(BOT_TOKEN)
 
-bot = telebot.TeleBot(TOKEN)
+# ========= BOT HANDLERS =========
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(message, "🔥 أهلاً! أرسل لي صورة الشارت وسأحللها لك فوراً!")
+    bot.reply_to(message, "🔥 البوت شغّال بنجاح على Render!\nارسل صورة الشارت الآن 👍")
 
 @bot.message_handler(content_types=['photo'])
-def handle_photo(message):
-    bot.reply_to(message, "📊 جاري تحليل الصورة…")
+def get_photo(message):
+    bot.reply_to(message, "📸 تم استلام الصورة! جارٍ التحليل…")
+    # يمكنك هنا إضافة كود التحليل أو الردود الخاصة بك
 
-    file_id = message.photo[-1].file_id
-    file_info = bot.get_file(file_id)
-    downloaded = bot.download_file(file_info.file_path)
 
-    img = Image.open(io.BytesIO(downloaded))
+# ========= FLASK SERVER =========
 
-    response = "📌 نتيجة التحليل:\n"
-    response += "• الاتجاه العام: هابط\n"
-    response += "• RSI: مستوى جيد للدخول\n"
-    response += "• MA: السعر تحت المتوسط → بيع أقوى\n"
-    response += "• توقع الشمعة القادمة: 🔻 هبوط محتمل\n"
-    response += "• إشارة الدخول: SELL"
+app = Flask(__name__)
 
-    bot.reply_to(message, response)
+@app.route('/')
+def home():
+    return "Bot is running successfully!"
 
-print("Bot is running...")
-bot.infinity_polling()
+# ========= RUN BOT + SERVER =========
+
+if __name__ == "__main__":
+    # تشغيل البوت بشكل مستمر
+    import threading
+
+    def polling_thread():
+        bot.polling(none_stop=True, interval=0, timeout=20)
+
+    thread = threading.Thread(target=polling_thread)
+    thread.daemon = True
+    thread.start()
+
+    # تشغيل Flask لكي يبقى السيرفر حي على Render
+    app.run(host="0.0.0.0", port=10000)
