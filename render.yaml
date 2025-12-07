@@ -3,7 +3,7 @@ services:
     type: web
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python main.py"
+    startCommand: "python3 main.py"
     envVars:
       - key: BOT_TOKEN
         value: "7996482415:AAFZh4E-ivoOhRi8s_6Vg2qKvATOhAm54ek"
