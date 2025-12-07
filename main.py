@@ -1,24 +1,25 @@
 
 import os
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import logging
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("BOT_TOKEN")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔥 البوت يعمل بنجاح!")
+logging.basicConfig(level=logging.INFO)
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(update.message.text)
+async def start(update, context):
+    await update.message.reply_text("🚀 البوت شغال بنجاح!!")
 
-async def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+async def echo(update, context):
+    await update.message.reply_text("✔️ تم الاستلام")
+
+def main():
+    app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+    app.add_handler(MessageHandler(filters.TEXT, echo))
 
-    await app.run_polling()
+    app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
