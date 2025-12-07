@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: botdy-1
+    name: botdy
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python main.py"
+    startCommand: "gunicorn main:app"
