@@ -1,8 +1,2 @@
-telebot
 pyTelegramBotAPI
-requests
-flask
-gunicorn
-pillow
-numpy
-urllib3
+Pillow
