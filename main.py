@@ -1,26 +1,23 @@
 import os
-import logging
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv7996482415:AAFZh4E-ivoOhRi8s_6Vg2qKvATOhAm54ek
 
-logging.basicConfig(level=logging.INFO)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🚀 البوت يعمل بنجاح!")
 
-def start(update, context):
-    update.message.reply_text("البوت شغال بنجاح 🎉🔥")
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"📨 تم الاستلام: {update.message.text}")
 
-def echo(update, context):
-    update.message.reply_text("تم الاستلام ✔️")
+async def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-def main():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text, echo))
+    await app.run_polling()
 
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
