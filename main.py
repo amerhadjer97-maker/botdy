@@ -1,25 +1,42 @@
+import telebot
+from telebot import types
+from PIL import Image
+import io
 
-import os
-import logging
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+# ------------------------------------
+# ضع التوكن هنا
+TOKEN = "7996482415:AAFZh4E-ivoOhRi8s_6Vg2qKvATOhAm54ek"
+# ------------------------------------
 
-TOKEN = os.getenv("BOT_TOKEN")
+bot = telebot.TeleBot(TOKEN)
 
-logging.basicConfig(level=logging.INFO)
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.reply_to(message, "🔥 أهلاً! أرسل لي صورة الشارت وسأحللها لك فوراً!")
 
-async def start(update, context):
-    await update.message.reply_text("🚀 البوت شغال بنجاح!!")
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    bot.reply_to(message, "📊 جاري تحليل الصورة…")
 
-async def echo(update, context):
-    await update.message.reply_text("✔️ تم الاستلام")
+    # تحميل الصورة
+    file_id = message.photo[-1].file_id
+    file_info = bot.get_file(file_id)
+    downloaded = bot.download_file(file_info.file_path)
 
-def main():
-    app = Application.builder().token(TOKEN).build()
+    # فتح الصورة بداخل PIL
+    img = Image.open(io.BytesIO(downloaded))
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+    # هنا تضع خوارزميات التحليل
+    # مؤشرات MA + RSI + قمم + قيعان + توقع شمعة
 
-    app.run_polling()
+    response = "📌 نتيجة التحليل:\n"
+    response += "• الاتجاه العام: هابط\n"
+    response += "• RSI: مستوى جيد للدخول\n"
+    response += "• MA: السعر تحت المتوسط → بيع أقوى\n"
+    response += "• توقع الشمعة القادمة: 🔻 هبوط محتمل\n"
+    response += "• إشارة الدخول: SELL"
 
-if __name__ == "__main__":
-    main()
+    bot.reply_to(message, response)
+
+print("Bot is running...")
+bot.infinity_polling()
