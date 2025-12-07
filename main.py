@@ -2,11 +2,10 @@ import telebot
 from telebot import types
 from PIL import Image
 import io
+import os
 
-# ------------------------------------
-# ضع التوكن هنا
+# Telegram Token
 TOKEN = "7996482415:AAFZh4E-ivoOhRi8s_6Vg2qKvATOhAm54ek"
-# ------------------------------------
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -18,15 +17,12 @@ def start(message):
 def handle_photo(message):
     bot.reply_to(message, "📊 جاري تحليل الصورة…")
 
-    # تحميل الصورة
     file_id = message.photo[-1].file_id
     file_info = bot.get_file(file_id)
     downloaded = bot.download_file(file_info.file_path)
 
-    # فتح الصورة بداخل PIL
     img = Image.open(io.BytesIO(downloaded))
 
-    # التحليل
     response = "📌 نتيجة التحليل:\n"
     response += "• الاتجاه العام: هابط\n"
     response += "• RSI: مستوى جيد للدخول\n"
