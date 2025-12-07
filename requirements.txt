@@ -1,2 +1,7 @@
 pyTelegramBotAPI
-Pillow
+requests
+pillow
+numpy
+urllib3
+flask
+gunicorn
