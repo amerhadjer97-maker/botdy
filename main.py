@@ -7,7 +7,7 @@ app = Flask(__name__)
 # ==============================
 #   Telegram BOT TOKEN
 # ==============================
-BOT_TOKEN = os.getenv("7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI")  # اجلب التوكن من Environment Variables
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # اجلب التوكن من Environment Variables
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 
 
