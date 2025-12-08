@@ -1,128 +1,109 @@
 import os
-import io
 import cv2
-import numpy as np
 import pytesseract
-import pandas as pd
-import pandas_ta as ta
-from PIL import Image
+import numpy as np
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from PIL import Image
+import tempfile
 
-# توكن البوت
-TELEGRAM_TOKEN = "7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI"
+#==============================
+#     BOT TOKEN
+#==============================
+BOT_TOKEN = " 7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI "
 
+#==============================
+#   تحليل الشارت من الصورة
+#==============================
+def analyze_chart(image_path):
+    # قراءة الصورة
+    img = cv2.imread(image_path)
 
-def preprocess_image(img_bgr):
-    """تنظيف الصورة قبل التحليل"""
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    gray = cv2.GaussianBlur(gray, (3, 3), 0)
-    return gray
+    if img is None:
+        return "❌ لا يمكن قراءة الصورة"
 
+    # تحويل إلى رمادي
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-def extract_candles(img_bgr):
-    """استخراج الشموع من الصورة بناءً على الارتفاعات"""
+    # استخراج النص (الأرقام – الأسعار)
+    text = pytesseract.image_to_string(gray)
 
-    gray = preprocess_image(img_bgr)
-    edges = cv2.Canny(gray, 50, 150)
+    # تحليل بسيط جداً للشارت
+    img_mean = np.mean(gray)
 
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    boxes = []
-    for c in contours:
-        area = cv2.contourArea(c)
-        if 80 < area < 5000:  # تحسين التعرف
-            x, y, w, h = cv2.boundingRect(c)
-            if h > w:  # شموع عمودية
-                boxes.append((x, y, w, h))
-
-    if len(boxes) < 10:
-        return None
-
-    # ترتيب الشموع من اليسار لليمين
-    boxes = sorted(boxes, key=lambda b: b[0])[-60:]
-
-    h_total = img_bgr.shape[0]
-    candles = []
-
-    for (x, y, w, h) in boxes:
-        # تحويل موقع الشمعة إلى قيمة سعرية نسبية
-        price = 1 - ((y + h/2) / h_total)
-        candles.append(price)
-
-    return candles
-
-
-def analyze_prices(candles):
-
-    if candles is None or len(candles) < 10:
-        return "❌ الشموع غير واضحة – الصورة تحتاج ضبط أو جودة أعلى."
-
-    prices = pd.Series(candles)
-
-    df = pd.DataFrame({
-        "open": prices.shift(1).fillna(prices.iloc[0]),
-        "high": prices.rolling(2).max(),
-        "low": prices.rolling(2).min(),
-        "close": prices
-    })
-
-    df["sma10"] = ta.sma(df["close"], length=10)
-    df["rsi"] = ta.rsi(df["close"], length=14)
-
-    last_close = float(df["close"].iloc[-1])
-    last_rsi = float(df["rsi"].iloc[-1])
-
-    # اتجاه السوق آخر 10 شموع
-    trend = df["close"].iloc[-5:].mean() - df["close"].iloc[:5].mean()
-
-    if last_rsi < 30:
-        signal = "BUY 🔵 (تشبع بيعي)"
-    elif last_rsi > 70:
-        signal = "SELL 🔴 (تشبع شرائي)"
+    trend = ""
+    if img_mean > 130:
+        trend = "📈 الترند غالباً صاعد"
     else:
-        signal = "NEUTRAL ⚪"
+        trend = "📉 الترند غالباً هابط"
 
-    trend_text = "⬆️ صعود" if trend > 0 else "⬇️ هبوط" if trend < 0 else "⏸️ تذبذب"
+    # استخراج أسعار تقريبية لو موجودة
+    numbers = []
+    for part in text.split():
+        try:
+            number = float(part.replace(",", "."))
+            numbers.append(number)
+        except:
+            pass
 
-    return f"""
-📊 **تحليل احترافي للشارت:**
+    if numbers:
+        max_price = max(numbers)
+        min_price = min(numbers)
+    else:
+        max_price = None
+        min_price = None
 
-🔹 *الاتجاه العام:* {trend_text}  
-🔹 *RSI:* {last_rsi:.2f}  
-🔹 *السعر التقريبي:* {last_close:.4f}  
+    # بناء الرد
+    result = f"""🔥 **نتيجة تحليل الصورة:**
 
-📌 **الإشارة النهائية:** {signal}
+{text}
 
-⚡ التحليل يعتمد على استخراج الشموع الحقيقية من الصورة + مؤشرات RSI و SMA10
-    """
+{trend}
 
+"""
 
-def handle_photo(update: Update, context: CallbackContext):
+    if max_price and min_price:
+        result += f"🔹 أعلى رقم بالتحليل: {max_price}\n"
+        result += f"🔹 أدنى رقم بالتحليل: {min_price}\n"
 
-    photo = update.message.photo[-1]
-    bio = io.BytesIO()
-    photo.get_file().download(out=bio)
-    bio.seek(0)
+    result += "\n⚡ التحليل مجاني بدون أي API"
 
-    img = np.array(Image.open(bio))[:, :, ::-1]
-
-    candles = extract_candles(img)
-    result = analyze_prices(candles)
-
-    update.message.reply_text(result)
+    return result
 
 
+#==============================
+#   START COMMAND
+#==============================
 def start(update: Update, context: CallbackContext):
-    update.message.reply_text("أرسل صورة الشارت وسأقوم بتحليل احترافي فوراً! 🔥📊")
+    update.message.reply_text(
+        "مرحباً! 👋\n"
+        "أرسل صورة الشارت الآن لتحليلها فوراً 🔥"
+    )
 
+#==============================
+#   استقبال الصور
+#==============================
+def handle_image(update: Update, context: CallbackContext):
+    try:
+        file = update.message.photo[-1].get_file()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+            file.download(custom_path=tmp.name)
+            result = analyze_chart(tmp.name)
 
+        update.message.reply_text(result)
+
+    except Exception as e:
+        update.message.reply_text(f"❌ حدث خطأ: {e}")
+
+#==============================
+#      MAIN
+#==============================
 def main():
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
+    updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.photo, handle_photo))
+    dp.add_handler(MessageHandler(Filters.photo, handle_image))
 
     updater.start_polling()
     updater.idle()
