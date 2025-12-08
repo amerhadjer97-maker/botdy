@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ---------- قراءة المتغيرات من البيئة ----------
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # ضع اسم المتغير هذا في Render
+BOT_TOKEN = os.getenv("   7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI")  # ضع اسم المتغير هذا في Render
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PORT = int(os.getenv("PORT", 10000))
 
