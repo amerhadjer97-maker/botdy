@@ -1,67 +1,54 @@
+import os
+from flask import Flask, request
 import requests
-import time
+
+app = Flask(__name__)
 
 # ============================
-#      BOT TOKEN
+# BOT TOKEN
 # ============================
 BOT_TOKEN = "7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI"
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 
-LAST_UPDATE_ID = 0
 
 # ============================
-#      ارسال رسالة
+# إرسال رسالة
 # ============================
 def send_message(chat_id, text):
     url = BASE_URL + "sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": text
-    }
+    payload = {"chat_id": chat_id, "text": text}
     requests.post(url, json=payload)
 
-# ============================
-#      قراءة الرسائل
-# ============================
-def get_updates():
-    url = BASE_URL + "getUpdates"
-    params = {
-        "offset": LAST_UPDATE_ID + 1
-    }
-    response = requests.get(url, params=params)
-    return response.json()
 
 # ============================
-#      معالجة الرسائل
+# Webhook
 # ============================
-def handle_message(message):
-    chat_id = message["message"]["chat"]["id"]
-    text = message["message"].get("text", "")
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def webhook():
+    data = request.get_json()
 
-    if text == "/start":
-        send_message(chat_id, "مرحبا! البوت يعمل الآن بنجاح 😄🔥")
+    if "message" in data:
+        chat_id = data["message"]["chat"]["id"]
+        text = data["message"].get("text", "")
 
-    else:
-        send_message(chat_id, f"لقد استقبلت رسالتك: {text}")
+        if text == "/start":
+            send_message(chat_id, "البوت يعمل بنجاح على Render! 🔥")
+        else:
+            send_message(chat_id, f"استلمت رسالتك: {text}")
 
-# ============================
-#      حلقة التشغيل
-# ============================
-def main():
-    global LAST_UPDATE_ID
+    return "OK", 200
 
-    while True:
-        updates = get_updates()
-
-        if "result" in updates:
-            for update in updates["result"]:
-                LAST_UPDATE_ID = update["update_id"]
-                handle_message(update)
-
-        time.sleep(1)
 
 # ============================
-#      تشغيل البوت
+# الصفحة الرئيسية
+# ============================
+@app.route("/")
+def home():
+    return "Bot is running!", 200
+
+
+# ============================
+# Main
 # ============================
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
