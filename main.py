@@ -3,9 +3,9 @@ import requests
 import time
 
 # ============================
-#   BOT TOKEN
+#   BOT TOKEN (مباشرة في الكود)
 # ============================
-BOT_TOKEN = os.getenv("7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI")
+BOT_TOKEN = "YOUR_TOKEN_HERE" 7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 
 LAST_UPDATE_ID = 0
@@ -62,7 +62,7 @@ def main():
                 if "message" in update:
                     handle_message(update["message"])
 
-        time.sleep(1)  # لمنع الضغط على السيرفر
+        time.sleep(1)
 
 
 if __name__ == "__main__":
