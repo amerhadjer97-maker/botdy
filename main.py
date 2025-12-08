@@ -10,9 +10,6 @@ BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 
 LAST_UPDATE_ID = 0
 
-# ============================
-#   ارسال رسالة
-# ============================
 def send_message(chat_id, text):
     url = BASE_URL + "sendMessage"
     payload = {
@@ -21,26 +18,17 @@ def send_message(chat_id, text):
     }
     requests.post(url, json=payload)
 
-# ============================
-#   معالجة الرسائل
-# ============================
 def handle_message(message):
     chat_id = message["chat"]["id"]
     text = message.get("text", "")
     send_message(chat_id, f"مرحبا! استلمت رسالتك: {text}")
 
-# ============================
-#   جلب التحديثات من Telegram
-# ============================
 def get_updates(offset=None):
     url = BASE_URL + "getUpdates"
     params = {"timeout": 30, "offset": offset}
     response = requests.get(url, params=params)
     return response.json()
 
-# ============================
-#   الـــLoop الرئيسي
-# ============================
 def main():
     global LAST_UPDATE_ID
     print("🤖 Bot is running with POLLING...")
