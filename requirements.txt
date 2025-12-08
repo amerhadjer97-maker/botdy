@@ -1,5 +1,7 @@
-
-telebot
-transformers
-torch
+python-telegram-bot==13.17
+opencv-python
+pytesseract
+numpy
+pandas
+pandas_ta
 Pillow
