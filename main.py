@@ -1,8 +1,6 @@
 import telebot
 from flask import Flask
-
-# ضع التوكن الخاص بك هنا 👇
-BOT_TOKEN = "7996482415:AAFZh4E-ivoOhRi8s_6Vg2qKvATOhAm54ek"
+BOT_TOKEN = "7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI"
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # ========= BOT HANDLERS =========
