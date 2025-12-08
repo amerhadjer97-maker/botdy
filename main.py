@@ -17,7 +17,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PORT = int(os.getenv("PORT", 10000))
 
 if not BOT_TOKEN:
-    logger.error("لم يتم العثور على TELEGRAM_BOT_TOKEN في المتغيرات البيئة. ضع توكن البوت في إعدادات Render.")
+    logger.error("7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI")
     raise SystemExit("Missing TELEGRAM_BOT_TOKEN")
 
 if not OPENAI_API_KEY:
