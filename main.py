@@ -1,18 +1,16 @@
-import os
 import requests
 import time
 
 # ============================
-#   BOT TOKEN (مباشرة في الكود)
+#      BOT TOKEN
 # ============================
-BOT_TOKEN = "YOUR_TOKEN_HERE" 7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI
+BOT_TOKEN = "7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI"
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 
 LAST_UPDATE_ID = 0
 
-
 # ============================
-#   ارسال رسالة
+#      ارسال رسالة
 # ============================
 def send_message(chat_id, text):
     url = BASE_URL + "sendMessage"
@@ -22,48 +20,48 @@ def send_message(chat_id, text):
     }
     requests.post(url, json=payload)
 
-
 # ============================
-#   معالجة الرسائل
+#      قراءة الرسائل
 # ============================
-def handle_message(message):
-    chat_id = message["chat"]["id"]
-    text = message.get("text", "")
-
-    # رد تجريبي
-    send_message(chat_id, f"مرحبا! استلمت رسالتك: {text}")
-
-
-# ============================
-#   جلب التحديثات من Telegram
-# ============================
-def get_updates(offset=None):
+def get_updates():
     url = BASE_URL + "getUpdates"
-    params = {"timeout": 30, "offset": offset}
+    params = {
+        "offset": LAST_UPDATE_ID + 1
+    }
     response = requests.get(url, params=params)
     return response.json()
 
+# ============================
+#      معالجة الرسائل
+# ============================
+def handle_message(message):
+    chat_id = message["message"]["chat"]["id"]
+    text = message["message"].get("text", "")
+
+    if text == "/start":
+        send_message(chat_id, "مرحبا! البوت يعمل الآن بنجاح 😄🔥")
+
+    else:
+        send_message(chat_id, f"لقد استقبلت رسالتك: {text}")
 
 # ============================
-#   الـــLoop الرئيسي
+#      حلقة التشغيل
 # ============================
 def main():
     global LAST_UPDATE_ID
 
-    print("🤖 Bot is running with POLLING...")
-
     while True:
-        updates = get_updates(LAST_UPDATE_ID + 1)
+        updates = get_updates()
 
         if "result" in updates:
             for update in updates["result"]:
                 LAST_UPDATE_ID = update["update_id"]
-
-                if "message" in update:
-                    handle_message(update["message"])
+                handle_message(update)
 
         time.sleep(1)
 
-
+# ============================
+#      تشغيل البوت
+# ============================
 if __name__ == "__main__":
     main()
