@@ -1,36 +1,19 @@
 import os
-from flask import Flask, request
 import requests
+import time
 
-app = Flask(__name__)
-
-# ==============================
-#   Telegram BOT TOKEN
-# ==============================
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # اجلب التوكن من Environment Variables
+# ============================
+#   BOT TOKEN
+# ============================
+BOT_TOKEN = os.getenv("7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI")
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 
-
-# ==============================
-#   Webhook route
-# ==============================
-@app.route(f"/{BOT_TOKEN}", methods=['POST'])
-def webhook():
-    data = request.get_json()
-
-    if "message" in data:
-        chat_id = data["message"]["chat"]["id"]
-        text = data["message"].get("text", "")
-
-        # رد بسيط للتجربة
-        send_message(chat_id, f"تم استلام رسالتك: {text}")
-
-    return "OK", 200
+LAST_UPDATE_ID = 0
 
 
-# ==============================
-#   إرسال رسالة
-# ==============================
+# ============================
+#   ارسال رسالة
+# ============================
 def send_message(chat_id, text):
     url = BASE_URL + "sendMessage"
     payload = {
@@ -40,12 +23,47 @@ def send_message(chat_id, text):
     requests.post(url, json=payload)
 
 
-# ==============================
-#   Main
-# ==============================
-@app.route("/")
-def home():
-    return "Bot is running!"
+# ============================
+#   معالجة الرسائل
+# ============================
+def handle_message(message):
+    chat_id = message["chat"]["id"]
+    text = message.get("text", "")
+
+    # رد تجريبي
+    send_message(chat_id, f"مرحبا! استلمت رسالتك: {text}")
+
+
+# ============================
+#   جلب التحديثات من Telegram
+# ============================
+def get_updates(offset=None):
+    url = BASE_URL + "getUpdates"
+    params = {"timeout": 30, "offset": offset}
+    response = requests.get(url, params=params)
+    return response.json()
+
+
+# ============================
+#   الـــLoop الرئيسي
+# ============================
+def main():
+    global LAST_UPDATE_ID
+
+    print("🤖 Bot is running with POLLING...")
+
+    while True:
+        updates = get_updates(LAST_UPDATE_ID + 1)
+
+        if "result" in updates:
+            for update in updates["result"]:
+                LAST_UPDATE_ID = update["update_id"]
+
+                if "message" in update:
+                    handle_message(update["message"])
+
+        time.sleep(1)  # لمنع الضغط على السيرفر
+
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    main()
