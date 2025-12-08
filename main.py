@@ -9,68 +9,97 @@ from PIL import Image
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+# توكن البوت
+TELEGRAM_TOKEN = "7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI"
 
-if not TELEGRAM_TOKEN:
-    raise RuntimeError("7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI")
 
-def ocr_read(img_bgr):
-    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-    pil = Image.fromarray(img_rgb)
-    text = pytesseract.image_to_string(pil, lang='eng')
-    return text
+def preprocess_image(img_bgr):
+    """تنظيف الصورة قبل التحليل"""
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    return gray
+
 
 def extract_candles(img_bgr):
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (5,5), 0)
-    _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    contours, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    boxes = [cv2.boundingRect(c) for c in contours if cv2.contourArea(c) > 80]
-    boxes = sorted(boxes, key=lambda b: b[0])[-50:]
-    
-    h = img_bgr.shape[0]
+    """استخراج الشموع من الصورة بناءً على الارتفاعات"""
+
+    gray = preprocess_image(img_bgr)
+    edges = cv2.Canny(gray, 50, 150)
+
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    boxes = []
+    for c in contours:
+        area = cv2.contourArea(c)
+        if 80 < area < 5000:  # تحسين التعرف
+            x, y, w, h = cv2.boundingRect(c)
+            if h > w:  # شموع عمودية
+                boxes.append((x, y, w, h))
+
+    if len(boxes) < 10:
+        return None
+
+    # ترتيب الشموع من اليسار لليمين
+    boxes = sorted(boxes, key=lambda b: b[0])[-60:]
+
+    h_total = img_bgr.shape[0]
     candles = []
-    for (x,y,w,hh) in boxes:
-        price_pos = 1 - ((y + hh/2) / h)
-        candles.append(price_pos)
-    
+
+    for (x, y, w, h) in boxes:
+        # تحويل موقع الشمعة إلى قيمة سعرية نسبية
+        price = 1 - ((y + h/2) / h_total)
+        candles.append(price)
+
     return candles
 
+
 def analyze_prices(candles):
-    if len(candles) < 10:
-        return "الصورة غير واضحة ولا يمكن استخراج الشموع"
-    
+
+    if candles is None or len(candles) < 10:
+        return "❌ الشموع غير واضحة – الصورة تحتاج ضبط أو جودة أعلى."
+
     prices = pd.Series(candles)
+
     df = pd.DataFrame({
-        "open": prices,
-        "high": prices,
-        "low": prices,
+        "open": prices.shift(1).fillna(prices.iloc[0]),
+        "high": prices.rolling(2).max(),
+        "low": prices.rolling(2).min(),
         "close": prices
     })
 
     df["sma10"] = ta.sma(df["close"], length=10)
     df["rsi"] = ta.rsi(df["close"], length=14)
 
-    last_close = df["close"].iloc[-1]
+    last_close = float(df["close"].iloc[-1])
     last_rsi = float(df["rsi"].iloc[-1])
 
+    # اتجاه السوق آخر 10 شموع
+    trend = df["close"].iloc[-5:].mean() - df["close"].iloc[:5].mean()
+
     if last_rsi < 30:
-        signal = "BUY"
+        signal = "BUY 🔵 (تشبع بيعي)"
     elif last_rsi > 70:
-        signal = "SELL"
+        signal = "SELL 🔴 (تشبع شرائي)"
     else:
-        signal = "NEUTRAL"
+        signal = "NEUTRAL ⚪"
+
+    trend_text = "⬆️ صعود" if trend > 0 else "⬇️ هبوط" if trend < 0 else "⏸️ تذبذب"
 
     return f"""
-📊 تحليل الشارت (مجاناً بدون OpenAI):
+📊 **تحليل احترافي للشارت:**
 
-🔹 RSI: {last_rsi:.2f}
-🔹 آخر سعر تقريبي: {last_close:.4f}
+🔹 *الاتجاه العام:* {trend_text}  
+🔹 *RSI:* {last_rsi:.2f}  
+🔹 *السعر التقريبي:* {last_close:.4f}  
 
-📌 الإشارة: {signal}
-"""
+📌 **الإشارة النهائية:** {signal}
+
+⚡ التحليل يعتمد على استخراج الشموع الحقيقية من الصورة + مؤشرات RSI و SMA10
+    """
+
 
 def handle_photo(update: Update, context: CallbackContext):
+
     photo = update.message.photo[-1]
     bio = io.BytesIO()
     photo.get_file().download(out=bio)
@@ -83,16 +112,21 @@ def handle_photo(update: Update, context: CallbackContext):
 
     update.message.reply_text(result)
 
+
 def start(update: Update, context: CallbackContext):
-    update.message.reply_text("أرسل صورة الشارت وسأحللها الآن 🔥")
+    update.message.reply_text("أرسل صورة الشارت وسأقوم بتحليل احترافي فوراً! 🔥📊")
+
 
 def main():
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dp = updater.dispatcher
+
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.photo, handle_photo))
+
     updater.start_polling()
     updater.idle()
+
 
 if __name__ == "__main__":
     main()
