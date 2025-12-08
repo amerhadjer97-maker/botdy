@@ -1,5 +1,7 @@
 python-telegram-bot==13.15
-Flask
-openai
-Pillow
-requests
+opencv-python-headless
+pytesseract
+pillow
+pandas
+pandas_ta
+numpy
