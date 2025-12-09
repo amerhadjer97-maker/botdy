@@ -1,49 +1,38 @@
+# -*- coding: utf-8 -*-
 import logging
+from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters
 import easyocr
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from telegram import ChatAction
-import cv2
-import numpy as np
-from PIL import Image
-import io
 
-# -----------------------------
-# وضع التوكن هنا
 BOT_TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
-# -----------------------------
 
-logging.basicConfig(level=logging.INFO)
-reader = easyocr.Reader(['en'])  # لغة قراءة النصوص
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
-def start(update, context):
-    update.message.reply_text("🚀 البوت شغال! أرسل صورة وسأحللها فوراً.")
+reader = easyocr.Reader(['ar', 'en'])
 
-def analyze_image_bytes(image_bytes):
-    img = Image.open(io.BytesIO(image_bytes))
-    img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-    result = reader.readtext(img)
+async def start(update, context):
+    await update.message.reply_text("🔥 أرسل الصورة الآن وسأحلل النص الموجود فيها!")
 
-    text_result = "\n".join([res[1] for res in result]) if result else "❌ لا يوجد نص واضح في الصورة"
-    return text_result
+async def handle_photo(update, context):
+    await update.message.reply_text("⏳ جاري تحليل الصورة...")
 
-def handle_photo(update, context):
-    update.message.chat.send_action(ChatAction.TYPING)
+    photo = await update.message.photo[-1].get_file()
+    path = "img.jpg"
+    await photo.download_to_drive(path)
 
-    photo_file = update.message.photo[-1].get_file()
-    image_bytes = photo_file.download_as_bytearray()
-
-    text = analyze_image_bytes(image_bytes)
-    update.message.reply_text("🔍 *تحليل الصورة:*\n\n" + text)
+    result = reader.readtext(path)
+    if not result:
+        await update.message.reply_text("❌ لم أستطع استخراج أي نص من الصورة.")
+        return
+    
+    text = "\n".join([item[1] for item in result])
+    await update.message.reply_text(f"📊 *النص المستخرج:*\n\n{text}", parse_mode="Markdown")
 
 def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.photo, handle_photo))
-
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
