@@ -3,7 +3,7 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from PIL import Image
 import numpy as np
 
-BOT_TOKEN = "7996482415:AAHTdJmx7LIYtcXQdq-egcvq2b2hdBWuwPQ"
+BOT_TOKEN = "7996482415:AAEnb56gsGLJ-6M7NWF4efkSZFsuiCe1sZE"
 
 
 # ============= التحليل المتطوّر بدون OpenAI =============
@@ -37,19 +37,12 @@ def ultra_analyze(image_path):
     else:
         trend = "➡️ اتجاه جانبي"
 
-    # ---------- تقدير الدعم والمقاومة ----------
+    # ---------- دعم ومقاومة ----------
     low_zone = np.mean(np_img[int(h * 0.75):, :, 2])
     high_zone = np.mean(np_img[:int(h * 0.25), :, 2])
 
-    if low_zone < 90:
-        support = "🟦 دعم قوي"
-    else:
-        support = "▪ دعم ضعيف"
-
-    if high_zone < 90:
-        resistance = "🟥 مقاومة قوية"
-    else:
-        resistance = "▪ مقاومة ضعيفة"
+    support = "🟦 دعم قوي" if low_zone < 90 else "▪ دعم ضعيف"
+    resistance = "🟥 مقاومة قوية" if high_zone < 90 else "▪ مقاومة ضعيفة"
 
     # ---------- قرار الدخول ----------
     if trend.startswith("📈") and last_candle == "🟢 صاعدة":
@@ -62,7 +55,7 @@ def ultra_analyze(image_path):
     return trend, last_candle, support, resistance, decision
 
 
-# ============= استقبال وتحليل الصور =============
+# ============= استقبال الصور =============
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     photo = update.message.photo[-1]
@@ -85,9 +78,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
+    print("🔥 ULTRA FREE BOT RUNNING...")
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    print("🔥 ULTRA FREE BOT RUNNING...")
     app.run_polling()
 
 
