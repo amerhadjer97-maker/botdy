@@ -1,87 +1,88 @@
+import os
 import cv2
-import pytesseract
 import numpy as np
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-BOT_TOKEN = "7996482415:AAHTdJmx7LIYtcXQdq-egcvq2b2hdBWuwPQ"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+if not BOT_TOKEN:
+    raise RuntimeError("❌ BOT_TOKEN غير موجود في Environment Variables!")
 
-def extract_price(image_path):
+# تحليل الشارت من الصورة
+def analyze_chart(image_path):
     img = cv2.imread(image_path)
+
+    if img is None:
+        return "❌ حدث خطأ في قراءة الصورة."
+
+    # --- استخراج جزء الشموع ---
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)[1]
+    blur = cv2.GaussianBlur(gray, (5,5), 0)
+    edges = cv2.Canny(blur, 50, 150)
 
-    text = pytesseract.image_to_string(gray, config="--psm 6")
-    numbers = [s.replace(" ", "") for s in text.split("\n") if "." in s]
+    # اكتشاف الاتجاه باستخدام الميل العام
+    points = np.column_stack(np.where(edges > 0))
+    slope = 0
 
-    prices = []
-    for n in numbers:
-        try:
-            prices.append(float(n))
-        except:
-            pass
+    if len(points) > 50:
+        x = points[:, 1]
+        y = img.shape[0] - points[:, 0]
+        slope, _ = np.polyfit(x, y, 1)
 
-    if prices:
-        return max(prices), min(prices)
-    return None, None
+    trend = "📈 صاعد" if slope > 0.2 else "📉 هابط" if slope < -0.2 else "➖ عرضي"
 
-def analyze_trend(img):
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    lower_red = np.array([0, 70, 50])
-    upper_red = np.array([10, 255, 255])
-    mask = cv2.inRange(hsv, lower_red, upper_red)
+    # --- تحليل RSI بسيط ---
+    rsi_zone = "🔴 مرتفع (Overbought)" if np.mean(gray) > 150 else "🟢 منخفض (Oversold)"
 
-    red_pixels = cv2.countNonZero(mask)
-    total_pixels = img.size
-
-    ratio = red_pixels / total_pixels
-
-    if ratio > 0.01:
-        return "هابط قوي 🔻"
-    elif ratio < 0.005:
-        return "صاعد قوي 🔼"
+    # --- القرار النهائي ---
+    if trend == "📈 صاعد" and "منخفض" in rsi_zone:
+        decision = "⬆️ UP (شراء)"
+    elif trend == "📉 هابط" and "مرتفع" in rsi_zone:
+        decision = "⬇️ DOWN (بيع)"
     else:
-        return "ترند ضعيف أو جانبي ↔️"
+        decision = "⚠️ المنطقة غير مناسبة لدخول قوي"
 
-async def start_analysis(image_path):
-    img = cv2.imread(image_path)
+    # --- مدة الصفقة ---
+    duration = "⏳ أفضل مدة صفقة: 1 – 3 دقائق"
 
-    last_price, low_price = extract_price(image_path)
-    trend = analyze_trend(img)
+    result = f"""
+📊 **تحليل احترافي للشارٹ**:
+────────────────────
 
-    if last_price:
-        decision = "UP 🔼" if trend.startswith("صاعد") else "DOWN 🔻"
-    else:
-        decision = "❌ لم أستطع استخراج السعر"
-
-    msg = f"""
-📊 **تحليل احترافي للشارت:**
-
-📉 **الاتجاه:** {trend}
-💲 **أعلى سعر ظاهر:** {last_price}
-💲 **أقل سعر ظاهر:** {low_price}
-
+📌 **الاتجاه العام:** {trend}
+📌 **حالة RSI:** {rsi_zone}
 📌 **القرار:** {decision}
 
-⏱ **أفضل مدة للصفقة:** 1 – 3 دقائق
+{duration}
 """
-    return msg
 
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    photo = await update.message.photo[-1].get_file()
+    return result
+
+# استقبال الصور
+def handle_photo(update: Update, context: CallbackContext):
+    message = update.message
+    message.reply_text("🔍 جاري تحليل الشارت… ⏳")
+
+    photo_file = message.photo[-1].get_file()
     image_path = "chart.jpg"
-    await photo.download_to_drive(image_path)
+    photo_file.download(image_path)
 
-    msg = await start_analysis(image_path)
-    await update.message.reply_text(msg)
+    analysis = analyze_chart(image_path)
+    message.reply_text(analysis)
 
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    print("🔥 BOT IS RUNNING...")
-    await app.run_polling()
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("🔥 مرحباً! أرسل صورة شارت وسأحللها لك باحتراف.")
 
-import asyncio
-asyncio.run(main())
+def main():
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.photo, handle_photo))
+
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
