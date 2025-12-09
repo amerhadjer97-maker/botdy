@@ -1,93 +1,53 @@
-import cv2
-import numpy as np
-from PIL import Image
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from PIL import Image
+import numpy as np
 
-# ======================
-# 🔥 تم وضع التوكن هنا
-# ======================
 BOT_TOKEN = "7996482415:AAHTdJmx7LIYtcXQdq-egcvq2b2hdBWuwPQ"
 
 
-# ========== دالة تحليل الصورة ==========
+# ============= تحليل الشارت بدون OpenAI =============
 def analyze_chart(image_path):
 
-    img = cv2.imread(image_path)
-    if img is None:
-        return None, None, None, "❌ خطأ في تحميل الصورة", "لم يتم قراءة الصورة"
+    img = Image.open(image_path).convert("RGB")
+    np_img = np.array(img)
 
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    h, w, _ = np_img.shape
 
-    # --- محاولة استخراج أرقام RSI من الصورة ---
-    rsi_value = None
+    # ----- تحليل آخر شمعة -----
+    right_area = np_img[:, int(w*0.75):w]
 
-    # تحويل للصورة بالأبيض والأسود لتسهيل القراءة
-    try:
-        import pytesseract
-        text = pytesseract.image_to_string(Image.open(image_path))
+    red_px = np.sum((right_area[:,:,0] > 180) & (right_area[:,:,1] < 100))
+    green_px = np.sum((right_area[:,:,1] > 150) & (right_area[:,:,0] < 120))
 
-        import re
-        match = re.search(r"RSI.*?(\d{2})", text)
-        if match:
-            rsi_value = int(match.group(1))
-    except:
-        text = ""
-        rsi_value = None
+    if red_px > green_px:
+        last_candle = "🔴 هابطة"
+    else:
+        last_candle = "🟢 صاعدة"
 
-    # --- استخراج الاتجاه ---
-    blur = cv2.GaussianBlur(gray, (5,5), 0)
-    edges = cv2.Canny(blur, 40, 150)
+    # ----- تقدير الاتجاه -----
+    top = np.mean(np_img[:int(h*0.3), :, 1])
+    bottom = np.mean(np_img[int(h*0.7):, :, 1])
 
-    ys, xs = np.where(edges > 0)
-    trend = "غير واضح"
+    if bottom < top - 15:
+        trend = "📉 اتجاه هابط"
+    elif bottom > top + 15:
+        trend = "📈 اتجاه صاعد"
+    else:
+        trend = "➡️ اتجاه جانبي"
 
-    if len(xs) > 15:
-        coef = np.polyfit(xs, ys, 1)[0]
-        if coef < -0.25:
-            trend = "📈 صاعد"
-        elif coef > 0.25:
-            trend = "📉 هابط"
-        else:
-            trend = "➡️ جانبي"
+    # ----- قرار دخول تقريبي -----
+    if last_candle == "🟢 صاعدة" and trend == "📈 اتجاه صاعد":
+        decision = "🔥 دخول UP محتمل"
+    elif last_candle == "🔴 هابطة" and trend == "📉 اتجاه هابط":
+        decision = "🔻 دخول DOWN محتمل"
+    else:
+        decision = "⚠️ لا يوجد دخول مؤكّد"
 
-    # --- استخراج لون آخر شمعة (تقريب تقديري) ---
-    height, width = img.shape[:2]
-    last_candle_area = img[int(height * 0.25):int(height * 0.75), int(width * 0.7):width]
-
-    hsv = cv2.cvtColor(last_candle_area, cv2.COLOR_BGR2HSV)
-    mask_red = cv2.inRange(hsv, (0,50,50), (10,255,255))
-    mask_green = cv2.inRange(hsv, (40,50,50), (90,255,255))
-
-    red_px = np.sum(mask_red > 0)
-    green_px = np.sum(mask_green > 0)
-
-    last_candle = "🔴 هابطة" if red_px > green_px else "🟢 صاعدة"
-
-    # --- قرار الدخول ---
-    decision = "⚠️ لا يوجد دخول مؤكّد"
-    reason = ""
-
-    if rsi_value is not None:
-        if rsi_value < 30:
-            decision = "🔥 دخول UP"
-            reason += f"• RSI ({rsi_value}) في تشبع بيع\n"
-        elif rsi_value > 70:
-            decision = "🔻 دخول DOWN"
-            reason += f"• RSI ({rsi_value}) في تشبع شراء\n"
-
-    if "صاعد" in trend:
-        reason += "• الاتجاه العام صاعد\n"
-    elif "هابط" in trend:
-        reason += "• الاتجاه العام هابط\n"
-
-    reason += f"• آخر شمعة: {last_candle}\n"
-
-    return trend, rsi_value, last_candle, decision, reason
+    return trend, last_candle, decision
 
 
-
-# ========== عند استلام صورة ==========
+# ============= استقبال الصور =============
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     photo = update.message.photo[-1]
@@ -96,24 +56,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     img_path = "chart.jpg"
     await file.download_to_drive(img_path)
 
-    trend, rsi, candle, decision, reason = analyze_chart(img_path)
+    trend, candle, decision = analyze_chart(img_path)
 
     await update.message.reply_text(
-        f"📊 *تحليل الشارت – النسخة ULTRA*\n\n"
+        f"📊 *تحليل الشارت – النسخة المجانية*\n\n"
         f"🔹 الاتجاه: *{trend}*\n"
-        f"🔹 RSI: *{rsi if rsi else 'غير موجود'}*\n"
         f"🔹 آخر شمعة: {candle}\n\n"
-        f"🧠 *أسباب القرار:*\n{reason}\n"
-        f"🎯 *القرار النهائي:* {decision}",
+        f"🎯 *القرار:* {decision}",
         parse_mode="Markdown"
     )
 
 
-# ========== تشغيل البوت ==========
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    print("🔥 Bot Started Running (ULTRA MODE)")
+    print("🔥 FREE BOT RUNNING...")
     app.run_polling()
 
 
