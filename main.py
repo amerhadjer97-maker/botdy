@@ -1,88 +1,101 @@
+import logging
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
+import requests
+import base64
+import io
 from PIL import Image
-import numpy as np
 
-BOT_TOKEN = "7996482415:AAEnb56gsGLJ-6M7NWF4efkSZFsuiCe1sZE"
+BOT_TOKEN "7996482415:AAEnb56gsGLJ-6M7NWF4efkSZFsuiCe1sZE"
 
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 
-# ============= التحليل المتطوّر بدون OpenAI =============
-def ultra_analyze(image_path):
+# ---------------------------
+#   دالة تحليل الصور مجانا
+# ---------------------------
+async def analyze_image_free(image_bytes):
+    encoded = base64.b64encode(image_bytes).decode("utf-8")
 
-    img = Image.open(image_path).convert("RGB")
-    np_img = np.array(img)
+    url = "https://api.chatanywhere.net/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
 
-    h, w, _ = np_img.shape
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": "أنت مساعد ذكي تحلل الصور باحتراف شديد."},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": "حلل هذه الصورة بالتفصيل."},
+                    {"type": "input_image", "image_url": f"data:image/jpeg;base64,{encoded}"}
+                ]
+            }
+        ]
+    }
 
-    # ---------- تحليل آخر شمعة ----------
-    right = np_img[:, int(w * 0.78): w]
+    response = requests.post(url, json=payload, headers=headers).json()
 
-    red_px = np.sum((right[:, :, 0] > 180) & (right[:, :, 1] < 120))
-    green_px = np.sum((right[:, :, 1] > 150) & (right[:, :, 0] < 130))
+    try:
+        return response["choices"][0]["message"]["content"]
+    except:
+        return "⚠️ حدث خطأ أثناء التحليل."
 
-    if red_px > green_px:
-        last_candle = "🔴 هابطة"
-    else:
-        last_candle = "🟢 صاعدة"
-
-    # ---------- اتجاه السعر ----------
-    top = np.mean(np_img[:int(h * 0.3), :, 1])
-    mid = np.mean(np_img[int(h * 0.4):int(h * 0.6), :, 1])
-    bottom = np.mean(np_img[int(h * 0.7):, :, 1])
-
-    if bottom < mid < top:
-        trend = "📉 هابط بقوة"
-    elif bottom > mid > top:
-        trend = "📈 صاعد بقوة"
-    else:
-        trend = "➡️ اتجاه جانبي"
-
-    # ---------- دعم ومقاومة ----------
-    low_zone = np.mean(np_img[int(h * 0.75):, :, 2])
-    high_zone = np.mean(np_img[:int(h * 0.25), :, 2])
-
-    support = "🟦 دعم قوي" if low_zone < 90 else "▪ دعم ضعيف"
-    resistance = "🟥 مقاومة قوية" if high_zone < 90 else "▪ مقاومة ضعيفة"
-
-    # ---------- قرار الدخول ----------
-    if trend.startswith("📈") and last_candle == "🟢 صاعدة":
-        decision = "🔥 فرصة UP ممتازة"
-    elif trend.startswith("📉") and last_candle == "🔴 هابطة":
-        decision = "🔻 فرصة DOWN قوية"
-    else:
-        decision = "⚠️ السوق غير مناسب"
-
-    return trend, last_candle, support, resistance, decision
-
-
-# ============= استقبال الصور =============
+# ---------------------------
+#   استقبال الصور
+# ---------------------------
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    file = await update.message.photo[-1].get_file()
+    image_bytes = await file.download_as_bytearray()
 
-    photo = update.message.photo[-1]
-    file = await photo.get_file()
+    await update.message.reply_text("⏳ جاري تحليل الصورة… انتظر قليلاً 🔍")
 
-    img_path = "chart.jpg"
-    await file.download_to_drive(img_path)
+    result = await analyze_image_free(image_bytes)
 
-    trend, candle, support, resistance, decision = ultra_analyze(img_path)
+    await update.message.reply_text(result)
 
-    await update.message.reply_text(
-        f"📊 *ULTRA FREE – التحليل المتقدّم*\n\n"
-        f"🔹 الاتجاه: *{trend}*\n"
-        f"🔹 آخر شمعة: {candle}\n"
-        f"🔹 {support}\n"
-        f"🔹 {resistance}\n\n"
-        f"🎯 *القرار*: {decision}",
-        parse_mode="Markdown"
-    )
+# ---------------------------
+#   استقبال النصوص
+# ---------------------------
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_text = update.message.text
 
+    url = "https://api.chatanywhere.net/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": "أجب باحتراف وبشرح واضح."},
+            {"role": "user", "content": user_text}
+        ]
+    }
+
+    response = requests.post(url, json=payload, headers=headers).json()
+
+    try:
+        reply = response["choices"][0]["message"]["content"]
+    except:
+        reply = "⚠️ حدث خطأ."
+
+    await update.message.reply_text(reply)
+
+# ---------------------------
+#   تشغيل البوت
+# ---------------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔥 البوت شغال! ارسل صورة أو رسالة الآن!")
 
 def main():
-    print("🔥 ULTRA FREE BOT RUNNING...")
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.run_polling()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.TEXT, handle_text))
+
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
