@@ -1,6 +1,2 @@
-pytelegrambotapi
-flask
-pillow
-opencv-python-headless
-pytesseract
-numpy
+python-telegram-bot==13.15
+requests
