@@ -1,80 +1,56 @@
-import cv2
-import numpy as np
-import pytesseract
-from telegram.ext import Updater, MessageHandler, Filters, CommandHandler, CallbackContext
-from telegram import Update
+# main.py
+import os
+from io import BytesIO
+from PIL import Image, ImageStat
+from telegram import Bot, Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# ✔️ تم وضع التوكن الخاص بك هنا مباشرة
-BOT_TOKEN = "7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI"
-
-def analyze_chart(image_path):
-    img = cv2.imread(image_path)
-
-    if img is None:
-        return "❌ لم أستطع قراءة الصورة!"
-
-    # -------- تحليل الاتجاه --------
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 50, 150)
-    
-    lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=50, minLineLength=80, maxLineGap=10)
-
-    trend = "غير واضح"
-    if lines is not None:
-        slopes = []
-        for x1, y1, x2, y2 in lines[:, 0]:
-            if x2 - x1 != 0:
-                slopes.append((y2 - y1) / (x2 - x1))
-
-        if len(slopes) > 0:
-            avg_slope = np.mean(slopes)
-            if avg_slope < -0.2:
-                trend = "⬇️ ترند هابط قوي"
-            elif avg_slope > 0.2:
-                trend = "⬆️ ترند صاعد"
-            else:
-                trend = "➡️ ترند جانبي"
-
-    # -------- قراءة النصوص --------
-    text = pytesseract.image_to_string(gray, lang="eng")
-
-    result = f"""
-📊 **تحليل الشارت**
-
-📉 الاتجاه: {trend}
-
-🔍 النص الموجود:
-{text}
-
-🔥 هذا تحليل مجاني تماماً بدون OpenAI
-"""
-    return result
-
+# قراءة التوكن من متغير البيئة TELEGRAM_TOKEN
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+if not TELEGRAM_TOKEN:7996482415:"AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
+    raise RuntimeError("TELEGRAM_TOKEN غير مُعين في متغيرات البيئة")
 
 def start(update: Update, context: CallbackContext):
-    update.message.reply_text("أرسل صورة الشارت الآن وسأحللها مباشرة 🔥📈")
+    update.message.reply_text("أهلاً! أرسل صورة الشارت وسأحلّلها بشكل بسيط (أبعاد ومتوسط سطوع).")
 
+def analyze_image_from_bytes(image_bytes: bytes):
+    img = Image.open(BytesIO(image_bytes)).convert("RGB")
+    w, h = img.size
+    stat = ImageStat.Stat(img.convert("L"))
+    mean_brightness = stat.mean[0]
+    return {
+        "width": w,
+        "height": h,
+        "mean_brightness": mean_brightness
+    }
 
-def handle_image(update: Update, context: CallbackContext):
-    photo = update.message.photo[-1]
-    file = context.bot.get_file(photo.file_id)
-    file_path = "chart.jpg"
-    file.download(file_path)
-
-    result = analyze_chart(file_path)
-    update.message.reply_text(result)
-
+def photo_handler(update: Update, context: CallbackContext):
+    msg = update.message
+    if not msg.photo:
+        update.message.reply_text("لم يتم إرسال صورة صحيحة.")
+        return
+    # najib أعلى جودة صورة
+    photo = msg.photo[-1]
+    bio = BytesIO()
+    photo.get_file().download(out=bio)
+    bio.seek(0)
+    info = analyze_image_from_bytes(bio.read())
+    reply = (
+        f"تحليل بسيط للصورة:\n"
+        f"العرض: {info['width']} بكسل\n"
+        f"الارتفاع: {info['height']} بكسل\n"
+        f"متوسّط السطوع (0-255): {info['mean_brightness']:.1f}\n\n"
+        "ملاحظة: هذه نسخة أساسية. لإضافة تحليل الشمعات/اتجاهات نحتاج كود تحليل رسم بياني إضافي."
+    )
+    update.message.reply_text(reply)
 
 def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
+    updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dp = updater.dispatcher
-
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.photo, handle_image))
-
+    dp.add_handler(MessageHandler(Filters.photo, photo_handler))
     updater.start_polling()
     updater.idle()
-
 
 if __name__ == "__main__":
     main()
