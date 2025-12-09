@@ -1,3 +1,1 @@
-python-telegram-bot==21.6
-Pillow
-numpy
+pip install python-telegram-bot==13.15 opencv-python pillow numpy
