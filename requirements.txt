@@ -1,4 +1,6 @@
-python-telegram-bot==20.3
-replicate
+pyTelegramBotAPI==4.14.0
 Pillow
 requests
+opencv-python
+numpy
+python-dotenv
