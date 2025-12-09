@@ -1,5 +1,6 @@
+pytelegrambotapi
+flask
+pillow
+opencv-python
 pytesseract
-Pillow
-opencv-python-headless
-python-telegram-bot==13.7
 numpy
