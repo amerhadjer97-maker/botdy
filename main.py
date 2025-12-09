@@ -1,37 +1,40 @@
 import telebot
 from flask import Flask, request
 import requests
-from PIL import Image
-import numpy as np
-import io
 
 TOKEN = "7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# تحليل الصورة عبر HuggingFace مجاناً
+# تحليل الصورة عبر API مجاني (HuggingFace مجاناً)
 def analyze_image(image_bytes):
     url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large"
-    headers = {"Authorization": "Bearer hf_xxxxxxxxxxxxxxxxx"}  # اختياري فقط، يمكن تركه فارغاً
+    headers = {"Content-Type": "application/octet-stream"}
+
     response = requests.post(url, headers=headers, data=image_bytes)
 
     try:
-        return response.json()[0]["generated_text"]
+        data = response.json()
+        return data[0]["generated_text"]
     except:
         return "❌ لم أستطع تحليل الصورة."
 
 @bot.message_handler(content_types=["photo"])
 def handle_image(message):
     file_id = message.photo[-1].file_id
-    file = bot.get_file(file_id)
-    image_data = bot.download_file(file.file_path)
     
-    result = analyze_image(image_data)
-    bot.reply_to(message, "🔍 تحليل الصورة:\n\n" + result)
+    file_info = bot.get_file(file_id)
+    image_data = bot.download_file(file_info.file_path)
 
+    result = analyze_image(image_data)
+    bot.reply_to(message, f"🔍 **تحليل الصورة:**\n\n{result}")
+
+# Webhook
 @app.route("/" + TOKEN, methods=["POST"])
 def webhook():
-    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+    json_data = request.stream.read().decode("utf-8")
+    update = telebot.types.Update.de_json(json_data)
+    bot.process_new_updates([update])
     return "OK", 200
 
 @app.route("/", methods=["GET"])
