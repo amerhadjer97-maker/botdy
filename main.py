@@ -1,43 +1,39 @@
-# -*- coding: utf-8 -*-
 import logging
-from telegram.ext import Updater, MessageHandler, Filters, CommandHandler, CallbackContext
-from telegram import Update
 import easyocr
-import os
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram import ChatAction
+import cv2
+import numpy as np
+from PIL import Image
+import io
 
+# -----------------------------
+# وضع التوكن هنا
 BOT_TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
+# -----------------------------
 
-# Logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
+logging.basicConfig(level=logging.INFO)
+reader = easyocr.Reader(['en'])  # لغة قراءة النصوص
 
-# OCR Reader (ننشئه مرة واحدة فقط لتسريع الأداء)
-reader = easyocr.Reader(['ar', 'en'], gpu=False)
+def start(update, context):
+    update.message.reply_text("🚀 البوت شغال! أرسل صورة وسأحللها فوراً.")
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("🔥📸 أهلاً! أرسل أي صورة وسأقوم بتحليل النص الموجود داخلها فوراً!")
+def analyze_image_bytes(image_bytes):
+    img = Image.open(io.BytesIO(image_bytes))
+    img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    result = reader.readtext(img)
 
-def analyze_image(path):
-    try:
-        result = reader.readtext(path)
+    text_result = "\n".join([res[1] for res in result]) if result else "❌ لا يوجد نص واضح في الصورة"
+    return text_result
 
-        if not result:
-            return "❌ لم أستطع استخراج أي نص من الصورة."
+def handle_photo(update, context):
+    update.message.chat.send_action(ChatAction.TYPING)
 
-        text = "\n".join([item[1] for item in result])
-        return f"📊 *تحليل الصورة:* \n\n{text}"
+    photo_file = update.message.photo[-1].get_file()
+    image_bytes = photo_file.download_as_bytearray()
 
-    except Exception as e:
-        return f"❌ خطأ أثناء التحليل:\n{str(e)}"
-
-def handle_photo(update: Update, context: CallbackContext):
-    update.message.reply_text("⏳ جاري تحليل الصورة...")
-
-    file = update.message.photo[-1].get_file()
-    path = "image.jpg"
-    file.download(path)
-
-    response = analyze_image(path)
-    update.message.reply_text(response, parse_mode="Markdown")
+    text = analyze_image_bytes(image_bytes)
+    update.message.reply_text("🔍 *تحليل الصورة:*\n\n" + text)
 
 def main():
     updater = Updater(BOT_TOKEN, use_context=True)
@@ -45,8 +41,6 @@ def main():
 
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.photo, handle_photo))
-
-    logging.info("🚀 البوت يعمل الآن بدون API!")
 
     updater.start_polling()
     updater.idle()
