@@ -1,6 +1,6 @@
 pytelegrambotapi
 flask
 pillow
-opencv-python
+opencv-python-headless
 pytesseract
 numpy
