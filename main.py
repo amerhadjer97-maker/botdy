@@ -1,131 +1,130 @@
-# signal_bot.py
 import os
-import pandas as pd
+import logging
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder, MessageHandler, CommandHandler,
+    ContextTypes, filters
+)
+from PIL import Image
+import pytesseract
+import cv2
 import numpy as np
-from ta.trend import EMAIndicator, ADXIndicator
-from ta.momentum import RSIIndicator
-from ta.volatility import AverageTrueRange
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
-# ---------- إعدادات ----------
-TELEGRAM_TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
+# ----------------------------------
+# TOKEN الخاص بك 🔥
+# ----------------------------------
+BOT_TOKEN = "7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI"
 
-EMA_FAST = 5
-EMA_SLOW = 20
-RSI_PERIOD = 14
-ATR_PERIOD = 14
-ADX_PERIOD = 14
 
-SCORE_THRESHOLD = 3   # تحتاج 3+ لإشارة قوية
-RISK_PCT = 0.01
+logging.basicConfig(level=logging.INFO)
 
-# ---------- دوال المساعدة ----------
-def load_candles(pair: str, limit=200):
-    """
-    تحميل بيانات الشموع الأخيرة للزوج.
-    حالياً يستخدم CSV محلي: اسم الملف يجب أن يكون candles_<PAIR>.csv
-    بالصيغ: timestamp,open,high,low,close,volume
-    بدل ذلك ضع ربط API هنا.
-    """
-    fname = f"candles_{pair.replace('/','').upper()}.csv"
-    if not os.path.exists(fname):
-        raise FileNotFoundError(f"CSV for {pair} not found: {fname}")
-    df = pd.read_csv(fname, parse_dates=['timestamp'])
-    return df.tail(limit).reset_index(drop=True)
+# -------------------------------------------------
+#  تحليل خاص للشارت من الصورة باستخدام OCR + رؤية
+# -------------------------------------------------
+def analyze_chart(img_path):
+    img = cv2.imread(img_path)
 
-def add_indicators(df):
-    df = df.copy()
-    df['ema_fast'] = EMAIndicator(df['close'], EMA_FAST).ema_indicator()
-    df['ema_slow'] = EMAIndicator(df['close'], EMA_SLOW).ema_indicator()
-    df['rsi'] = RSIIndicator(df['close'], RSI_PERIOD).rsi()
-    df['atr'] = AverageTrueRange(df['high'], df['low'], df['close'], window=ATR_PERIOD).average_true_range()
-    df['adx'] = ADXIndicator(df['high'], df['low'], df['close'], window=ADX_PERIOD).adx()
-    return df
+    if img is None:
+        return "❌ لم أستطع قراءة الصورة."
 
-def find_swings(df, left=3, right=3):
-    highs, lows = [], []
-    for i in range(left, len(df)-right):
-        win = df.iloc[i-left:i+right+1]
-        if df['high'].iat[i] == win['high'].max():
-            highs.append((i, df['high'].iat[i]))
-        if df['low'].iat[i] == win['low'].min():
-            lows.append((i, df['low'].iat[i]))
-    return highs, lows
+    # قراءة النصوص من الصورة (مثل RSI – SMA – قيم السعر)
+    text_raw = pytesseract.image_to_string(Image.open(img_path))
+    text = text_raw.lower()
 
-def build_zones(df, swings, atr_multiplier=1.0):
-    zones = []
-    atr = df['atr'].fillna(method='bfill').iloc[-1] if 'atr' in df.columns else 0
-    pad = atr * atr_multiplier
-    for idx, price in swings:
-        zones.append((price - pad, price + pad))
-    return zones
+    # -------------------
+    #  استخراج إشارات مهمة
+    # -------------------
+    result = []
+    result.append("📊 **تحليل احترافي للشارت:**")
 
-def price_near_zone(price, zones, pct_threshold=0.002):
-    for lo, hi in zones:
-        if lo <= price <= hi:
-            return True
-        if abs(price - ((lo+hi)/2)) / (price + 1e-9) < pct_threshold:
-            return True
-    return False
+    # 1️⃣ ترند عام (تحليل ميل الفريم)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 80, 180)
 
-def score_signal(df):
-    """
-    يعيد 'BUY' أو 'SELL' أو 'WAIT' مع شرح مختصر.
-    """
-    df = add_indicators(df)
-    highs, lows = find_swings(df, left=3, right=3)
-    support_zones = build_zones(df, lows, atr_multiplier=1.0)
-    resistance_zones = build_zones(df, highs, atr_multiplier=1.0)
+    # نفترض إذا كانت الحواف أكثر هبوط → ترند هابط
+    vertical_sum = np.sum(edges, axis=0)
+    mid = len(vertical_sum) // 2
 
-    last = df.iloc[-1]
-    prev = df.iloc[-2]
-
-    score = 0
-    reasons = []
-
-    # اتجاه EMA
-    if last['ema_fast'] > last['ema_slow']:
-        score += 1
-        reasons.append("EMA up")
+    if np.sum(vertical_sum[:mid]) > np.sum(vertical_sum[mid:]):
+        result.append("🔻 الترند العام: **هابط**")
+        trend = "down"
     else:
-        score -= 1
-        reasons.append("EMA down")
+        result.append("🔺 الترند العام: **صاعد**")
+        trend = "up"
 
-    # شمعة قوة
-    if last['close'] > last['open'] and last['close'] > prev['close']:
-        score += 1
-        reasons.append("Bullish candle")
-    elif last['close'] < last['open'] and last['close'] < prev['close']:
-        score -= 1
-        reasons.append("Bearish candle")
+    # 2️⃣ تحليل SMA
+    if "sma" in text:
+        result.append("📉 مؤشر SMA موجود، احتمال وجود حركة اتجاهية قوية.")
 
-    # RSI
-    if 35 < last['rsi'] < 72:
-        score += 1
-        reasons.append("RSI ok")
-    elif last['rsi'] > 80:
-        score -= 1
-        reasons.append("RSI overbought")
-    elif last['rsi'] < 20:
-        score -= 1
-        reasons.append("RSI oversold")
+    # 3️⃣ تحليل RSI
+    rsi_value = None
+    for w in text.split():
+        if w.isdigit() and 5 < int(w) < 95:
+            rsi_value = int(w)
 
-    # ADX قوة اتجاه
-    if last['adx'] > 18:
-        score += 1
-        reasons.append("ADX strong")
+    if rsi_value:
+        result.append(f"📍 قيمة RSI: **{rsi_value}**")
 
-    # قرب مناطق S/R
-    if price_near_zone(last['close'], support_zones):
-        score += 1
-        reasons.append("Near support")
-    if price_near_zone(last['close'], resistance_zones):
-        score -= 1
-        reasons.append("Near resistance")
+        if rsi_value < 30:
+            result.append("🔵 RSI منخفض: **منطقة تشبع بيعي → احتمال انعكاس للأعلى**")
+        elif rsi_value > 70:
+            result.append("🔴 RSI عالي: **تشبع شرائي → احتمال هبوط**")
+        else:
+            result.append("🟢 RSI طبيعي → السوق مستقر لكن يتبع الترند.")
 
-    # القرار
-    if score >= SCORE_THRESHOLD:
-        return "BUY", score, reasons
-    if score <= -SCORE_THRESHOLD:
-        return "SELL", score, reasons
-    return "WAIT", score, reasons
+    # 4️⃣ قرار الصفقة
+    result.append("\n🎯 **قرار التداول:**")
+
+    if rsi_value:
+        if rsi_value > 70:
+            result.append("➡ القرار: **DOWN** 🔻")
+            result.append("السبب: RSI في منطقة تشبع شرائي + احتمالية هبوط.")
+        elif rsi_value < 30:
+            result.append("➡ القرار: **UP** 🔺")
+            result.append("السبب: RSI في منطقة تشبع بيعي + احتمال صعود.")
+        else:
+            # اعتماد الترند
+            if trend == "down":
+                result.append("➡ القرار: **DOWN** 🔻 (اتجاه هابط قوي)")
+            else:
+                result.append("➡ القرار: **UP** 🔺 (اتجاه صاعد)")
+
+    else:
+        # إذا لا يوجد RSI نعتمد الترند فقط
+        if trend == "down":
+            result.append("➡ القرار: **DOWN** 🔻 (اعتمادًا على الترند)")
+        else:
+            result.append("➡ القرار: **UP** 🔺 (اعتمادًا على الترند)")
+
+    result.append("\n⏳ **أفضل مدة صفقة:** 1 – 3 دقائق")
+
+    return "\n".join(result)
+
+
+# ------------------------------------------------
+#  استلام الصور من التليجرام
+# ------------------------------------------------
+async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo = update.message.photo[-1]
+    file = await photo.get_file()
+    img_path = "chart.jpg"
+    await file.download_to_drive(img_path)
+
+    await update.message.reply_text("⏳ جاري تحليل الشارت... 🔍")
+
+    analysis = analyze_chart(img_path)
+    await update.message.reply_text(analysis)
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔥 مرحباً! أرسل صورة شارت وسأحللها لك باحتراف.")
+
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_image))
+    print("🔥 البوت شغال…")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
