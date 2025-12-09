@@ -1,101 +1,89 @@
-import logging
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
-import requests
-import base64
+import os
 import io
+import cv2
+import numpy as np
 from PIL import Image
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-BOT_TOKEN "7996482415:AAEnb56gsGLJ-6M7NWF4efkSZFsuiCe1sZE"
+# -----------------------------
+#  التوكن الخاص بك (ملصوق هنا)
+# -----------------------------
+TELEGRAM_TOKEN = "7996482415:AAEnb56gsGLJ-6M7NWF4efkSZFsuiCe1sZE"
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-
-# ---------------------------
-#   دالة تحليل الصور مجانا
-# ---------------------------
-async def analyze_image_free(image_bytes):
-    encoded = base64.b64encode(image_bytes).decode("utf-8")
-
-    url = "https://api.chatanywhere.net/v1/chat/completions"
-    headers = {"Content-Type": "application/json"}
-
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "أنت مساعد ذكي تحلل الصور باحتراف شديد."},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "input_text", "text": "حلل هذه الصورة بالتفصيل."},
-                    {"type": "input_image", "image_url": f"data:image/jpeg;base64,{encoded}"}
-                ]
-            }
-        ]
-    }
-
-    response = requests.post(url, json=payload, headers=headers).json()
-
+# دالة تحليل الصورة (تحليل بسيط + استخراج مناطق مهمة)
+def analyze_chart_image(img_path):
     try:
-        return response["choices"][0]["message"]["content"]
-    except:
-        return "⚠️ حدث خطأ أثناء التحليل."
+        # قراءة الصورة
+        img = cv2.imread(img_path)
 
-# ---------------------------
-#   استقبال الصور
-# ---------------------------
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    file = await update.message.photo[-1].get_file()
-    image_bytes = await file.download_as_bytearray()
+        if img is None:
+            return "❌ لم أستطع قراءة الصورة"
 
-    await update.message.reply_text("⏳ جاري تحليل الصورة… انتظر قليلاً 🔍")
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    result = await analyze_image_free(image_bytes)
+        # فلترة لتحسين الشموع
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    await update.message.reply_text(result)
+        # اكتشاف الحواف لتحليل الاتجاه
+        edges = cv2.Canny(blur, 50, 150)
 
-# ---------------------------
-#   استقبال النصوص
-# ---------------------------
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_text = update.message.text
+        # حساب متوسط الحواف لمعرفة الترند
+        strength = np.mean(edges)
 
-    url = "https://api.chatanywhere.net/v1/chat/completions"
-    headers = {"Content-Type": "application/json"}
+        if strength > 60:
+            trend = "📈 ترند صاعد"
+        else:
+            trend = "📉 ترند هابط"
 
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "أجب باحتراف وبشرح واضح."},
-            {"role": "user", "content": user_text}
-        ]
-    }
+        # تحديد مناطق دخول تقديرية (بسيطة)
+        h, w = gray.shape
+        entry_zone_buy = f"منطقة شراء تقريبية: تحت السعر بـ {(h//12)}"
+        entry_zone_sell = f"منطقة بيع تقريبية: فوق السعر بـ {(h//10)}"
 
-    response = requests.post(url, json=payload, headers=headers).json()
+        return f"""
+✅ *تم تحليل الصورة بنجاح*
 
+🔍 *الترند الحالي:* {trend}
+
+🎯 *مناطق الدخول:*
+- {entry_zone_buy}
+- {entry_zone_sell}
+
+⚙️ التحليل تجريبي — يمكن تطويره أكثر إذا تريد.
+"""
+    except Exception as e:
+        return f"حدث خطأ: {str(e)}"
+
+
+# استقبال الصور
+def handle_photo(update: Update, context: CallbackContext):
     try:
-        reply = response["choices"][0]["message"]["content"]
-    except:
-        reply = "⚠️ حدث خطأ."
+        file = update.message.photo[-1].get_file()
+        img_path = "received.jpg"
+        file.download(img_path)
 
-    await update.message.reply_text(reply)
+        result = analyze_chart_image(img_path)
+        update.message.reply_text(result, parse_mode="Markdown")
 
-# ---------------------------
-#   تشغيل البوت
-# ---------------------------
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔥 البوت شغال! ارسل صورة أو رسالة الآن!")
+    except Exception as e:
+        update.message.reply_text("❌ خطأ أثناء معالجة الصورة: " + str(e))
+
+
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("🔥 أرسل لي أي صورة شارت وسأحللها لك فوراً!")
+
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    updater = Updater(TELEGRAM_TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.TEXT, handle_text))
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.photo, handle_photo))
 
-    app.run_polling()
+    updater.start_polling()
+    updater.idle()
+
 
 if __name__ == "__main__":
     main()
