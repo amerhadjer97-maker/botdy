@@ -1,56 +1,42 @@
-# main.py
-import os
-from io import BytesIO
-from PIL import Image, ImageStat
-from telegram import Bot, Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import telebot
+from flask import Flask, request
+import requests
+from PIL import Image
+import numpy as np
+import io
 
-# قراءة التوكن من متغير البيئة TELEGRAM_TOKEN
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-if not TELEGRAM_TOKEN:7996482415:"AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
-    raise RuntimeError("TELEGRAM_TOKEN غير مُعين في متغيرات البيئة")
+TOKEN = "7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI"
+bot = telebot.TeleBot(TOKEN)
+app = Flask(__name__)
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("أهلاً! أرسل صورة الشارت وسأحلّلها بشكل بسيط (أبعاد ومتوسط سطوع).")
+# تحليل الصورة عبر HuggingFace مجاناً
+def analyze_image(image_bytes):
+    url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large"
+    headers = {"Authorization": "Bearer hf_xxxxxxxxxxxxxxxxx"}  # اختياري فقط، يمكن تركه فارغاً
+    response = requests.post(url, headers=headers, data=image_bytes)
 
-def analyze_image_from_bytes(image_bytes: bytes):
-    img = Image.open(BytesIO(image_bytes)).convert("RGB")
-    w, h = img.size
-    stat = ImageStat.Stat(img.convert("L"))
-    mean_brightness = stat.mean[0]
-    return {
-        "width": w,
-        "height": h,
-        "mean_brightness": mean_brightness
-    }
+    try:
+        return response.json()[0]["generated_text"]
+    except:
+        return "❌ لم أستطع تحليل الصورة."
 
-def photo_handler(update: Update, context: CallbackContext):
-    msg = update.message
-    if not msg.photo:
-        update.message.reply_text("لم يتم إرسال صورة صحيحة.")
-        return
-    # najib أعلى جودة صورة
-    photo = msg.photo[-1]
-    bio = BytesIO()
-    photo.get_file().download(out=bio)
-    bio.seek(0)
-    info = analyze_image_from_bytes(bio.read())
-    reply = (
-        f"تحليل بسيط للصورة:\n"
-        f"العرض: {info['width']} بكسل\n"
-        f"الارتفاع: {info['height']} بكسل\n"
-        f"متوسّط السطوع (0-255): {info['mean_brightness']:.1f}\n\n"
-        "ملاحظة: هذه نسخة أساسية. لإضافة تحليل الشمعات/اتجاهات نحتاج كود تحليل رسم بياني إضافي."
-    )
-    update.message.reply_text(reply)
+@bot.message_handler(content_types=["photo"])
+def handle_image(message):
+    file_id = message.photo[-1].file_id
+    file = bot.get_file(file_id)
+    image_data = bot.download_file(file.file_path)
+    
+    result = analyze_image(image_data)
+    bot.reply_to(message, "🔍 تحليل الصورة:\n\n" + result)
 
-def main():
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.photo, photo_handler))
-    updater.start_polling()
-    updater.idle()
+@app.route("/" + TOKEN, methods=["POST"])
+def webhook():
+    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+    return "OK", 200
+
+@app.route("/", methods=["GET"])
+def index():
+    return "Bot is running!", 200
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=10000)
