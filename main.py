@@ -8,7 +8,7 @@ from ta.volatility import AverageTrueRange
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 # ---------- إعدادات ----------
-TELEGRAM_TOKEN = "PUT_YOUR_TELEGRAM_BOT_TOKEN_HERE"
+TELEGRAM_TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
 
 EMA_FAST = 5
 EMA_SLOW = 20
