@@ -1,6 +1,3 @@
 python-telegram-bot==21.6
-opencv-python
-numpy
 Pillow
-pytesseract
-requests
+numpy
