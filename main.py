@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # اجلب التوكن من متغير بيئي (لا تضعه هنا نصاً)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
+if not BOT_TOKEN:7996482415:"AAHTdJmx7LIYtcXQdq-egcvq2b2hdBWuwPQ"
     logger.error("BOT_TOKEN not set. Please add it as an environment variable.")
     raise SystemExit("Missing BOT_TOKEN environment variable")
 
