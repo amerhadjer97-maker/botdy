@@ -7,7 +7,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
-    raise RuntimeError("❌ BOT_TOKEN غير موجود في Environment Variables!")
+    raise RuntimeError("7996482415:AAHTdJmx7LIYtcXQdq-egcvq2b2hdBWuwPQ")
 
 # تحليل الشارت من الصورة
 def analyze_chart(image_path):
