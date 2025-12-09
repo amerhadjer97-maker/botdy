@@ -1,45 +1,117 @@
 import telebot
 from flask import Flask, request
-import requests
+import cv2
+import numpy as np
+import pytesseract
+from PIL import Image
 
-TOKEN = "7996482415:AAEbB5Eg305FyhddTG_xDrSNdNndVdw2fCI"
+# ============================
+#     TELEGRAM CONFIG
+# ============================
+TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# تحليل الصورة عبر API مجاني (HuggingFace مجاناً)
-def analyze_image(image_bytes):
-    url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large"
-    headers = {"Content-Type": "application/octet-stream"}
+# ============================
+#   IMAGE ANALYSIS FUNCTION
+# ============================
 
-    response = requests.post(url, headers=headers, data=image_bytes)
-
+def analyze_image(image_path):
     try:
-        data = response.json()
-        return data[0]["generated_text"]
-    except:
-        return "❌ لم أستطع تحليل الصورة."
+        img = cv2.imread(image_path)
 
-@bot.message_handler(content_types=["photo"])
-def handle_image(message):
-    file_id = message.photo[-1].file_id
-    
-    file_info = bot.get_file(file_id)
-    image_data = bot.download_file(file_info.file_path)
+        if img is None:
+            return "⚠️ لم أتمكن من قراءة الصورة!"
 
-    result = analyze_image(image_data)
-    bot.reply_to(message, f"🔍 **تحليل الصورة:**\n\n{result}")
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-# Webhook
-@app.route("/" + TOKEN, methods=["POST"])
+        text = pytesseract.image_to_string(gray, lang="eng")
+
+        analysis = ""
+
+        edges = cv2.Canny(gray, 50, 150)
+        edge_sum = np.sum(edges)
+
+        if edge_sum > 1500000:
+            trend = "📉 الترند هابط بقوة"
+        elif edge_sum > 900000:
+            trend = "📈 الترند صاعد"
+        else:
+            trend = "⚠️ السوق جانبي"
+
+        analysis += trend + "\n\n"
+
+        brightness = np.mean(gray)
+
+        if brightness > 160:
+            analysis += "🔆 الشموع فاتحة… ربما صعود قوي\n"
+        elif brightness < 80:
+            analysis += "🌑 الشموع داكنة… ضغط بيعي\n"
+        else:
+            analysis += "🌓 السوق متوازن\n"
+
+        density = int(edge_sum / 100000)
+        analysis += f"📊 قوة الحركة: {density}/20\n"
+
+        result = (
+            "🔍 **تحليل الصورة:**\n\n"
+            f"{analysis}\n"
+            "📄 **النص المستخرج من الصورة:**\n"
+            f"```\n{text}\n```"
+        )
+
+        return result
+
+    except Exception as e:
+        return f"❌ خطأ أثناء تحليل الصورة: {str(e)}"
+
+
+# ============================
+#     TELEGRAM HANDLERS
+# ============================
+
+@bot.message_handler(commands=['start'])
+def start_msg(message):
+    bot.reply_to(message,
+        "🔥 أهلاً بك! أرسل لي أي صورة وسأعطيك تحليل احترافي مباشرة!\n"
+        "يدعم: شارت – صفقات – شموع – أرقام – كتابة."
+    )
+
+@bot.message_handler(content_types=['photo'])
+def photo_handler(message):
+    try:
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded = bot.download_file(file_info.file_path)
+
+        img_path = "input_img.jpg"
+        with open(img_path, "wb") as f:
+            f.write(downloaded)
+
+        bot.reply_to(message, "⏳ جاري تحليل الصورة…")
+
+        result = analyze_image(img_path)
+
+        bot.reply_to(message, result)
+
+    except Exception as e:
+        bot.reply_to(message, f"❌ حدث خطأ: {str(e)}")
+
+
+# ============================
+#        FLASK SERVER
+# ============================
+
+@app.route(f"/{TOKEN}", methods=['POST'])
 def webhook():
-    json_data = request.stream.read().decode("utf-8")
-    update = telebot.types.Update.de_json(json_data)
-    bot.process_new_updates([update])
+    update = request.get_data().decode("utf-8")
+    bot.process_new_updates([telebot.types.Update.de_json(update)])
     return "OK", 200
 
 @app.route("/", methods=["GET"])
-def index():
-    return "Bot is running!", 200
+def home():
+    return "🔥 Bot is running without OpenAI!"
+
+# ============================
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    bot.infinity_polling()
