@@ -1,105 +1,87 @@
-# main.py
-import os
-import logging
-from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder, MessageHandler, CommandHandler,
-    ContextTypes, filters
-)
-from PIL import Image
-import pytesseract
 import cv2
+import pytesseract
 import numpy as np
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+BOT_TOKEN = "7996482415:AAHTdJmx7LIYtcXQdq-egcvq2b2hdBWuwPQ"
 
-# اجلب التوكن من متغير بيئي (لا تضعه هنا نصاً)
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:7996482415:"AAHTdJmx7LIYtcXQdq-egcvq2b2hdBWuwPQ"
-    logger.error("BOT_TOKEN not set. Please add it as an environment variable.")
-    raise SystemExit("Missing BOT_TOKEN environment variable")
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
-def analyze_chart(img_path: str) -> str:
-    img = cv2.imread(img_path)
-    if img is None:
-        return "❌ لم أستطع قراءة الصورة."
-
-    # OCR نصي
-    try:
-        text_raw = pytesseract.image_to_string(Image.open(img_path))
-    except Exception:
-        text_raw = ""
-    text = text_raw.lower()
-
-    result = []
-    result.append("📊 **تحليل احترافي للشارت:**")
-
-    # اتجاه تقريبي عبر حواف الصورة
+def extract_price(image_path):
+    img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 80, 180)
-    vertical_sum = np.sum(edges, axis=0)
-    mid = len(vertical_sum) // 2
-    if np.sum(vertical_sum[:mid]) > np.sum(vertical_sum[mid:]):
-        result.append("🔻 الترند العام: **هابط**")
-        trend = "down"
+    gray = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)[1]
+
+    text = pytesseract.image_to_string(gray, config="--psm 6")
+    numbers = [s.replace(" ", "") for s in text.split("\n") if "." in s]
+
+    prices = []
+    for n in numbers:
+        try:
+            prices.append(float(n))
+        except:
+            pass
+
+    if prices:
+        return max(prices), min(prices)
+    return None, None
+
+def analyze_trend(img):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    lower_red = np.array([0, 70, 50])
+    upper_red = np.array([10, 255, 255])
+    mask = cv2.inRange(hsv, lower_red, upper_red)
+
+    red_pixels = cv2.countNonZero(mask)
+    total_pixels = img.size
+
+    ratio = red_pixels / total_pixels
+
+    if ratio > 0.01:
+        return "هابط قوي 🔻"
+    elif ratio < 0.005:
+        return "صاعد قوي 🔼"
     else:
-        result.append("🔺 الترند العام: **صاعد**")
-        trend = "up"
+        return "ترند ضعيف أو جانبي ↔️"
 
-    # SMA موجود؟
-    if "sma" in text:
-        result.append("📉 مؤشر SMA موجود، احتمال وجود حركة اتجاهية قوية.")
+async def start_analysis(image_path):
+    img = cv2.imread(image_path)
 
-    # بحث عن قيمة RSI في النص
-    rsi_value = None
-    for w in text.split():
-        if w.isdigit() and 5 < int(w) < 95:
-            rsi_value = int(w)
-            break
+    last_price, low_price = extract_price(image_path)
+    trend = analyze_trend(img)
 
-    if rsi_value:
-        result.append(f"📍 قيمة RSI: **{rsi_value}**")
-        if rsi_value < 30:
-            result.append("🔵 RSI منخفض: **منطقة تشبع بيعي → احتمال انعكاس للأعلى**")
-        elif rsi_value > 70:
-            result.append("🔴 RSI عالي: **تشبع شرائي → احتمال هبوط**")
-        else:
-            result.append("🟢 RSI طبيعي → السوق مستقر لكن يتبع الترند.")
+    if last_price:
+        decision = "UP 🔼" if trend.startswith("صاعد") else "DOWN 🔻"
     else:
-        # بدون RSI نعتمد الترند
-        if trend == "down":
-            result.append("➡ القرار: **DOWN** 🔻 (اعتمادًا على الترند)")
-        else:
-            result.append("➡ القرار: **UP** 🔺 (اعتمادًا على الترند)")
+        decision = "❌ لم أستطع استخراج السعر"
 
-    result.append("\n⏳ **أفضل مدة صفقة:** 1 – 3 دقائق")
-    return "\n".join(result)
+    msg = f"""
+📊 **تحليل احترافي للشارت:**
 
-# handlers
-async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.photo:
-        await update.message.reply_text("أرسل صورة شارت صحيحة.")
-        return
+📉 **الاتجاه:** {trend}
+💲 **أعلى سعر ظاهر:** {last_price}
+💲 **أقل سعر ظاهر:** {low_price}
 
-    await update.message.reply_text("⏳ جاري تحليل الشارت... 🔍")
-    photo = update.message.photo[-1]
-    file = await photo.get_file()
-    img_path = "chart.jpg"
-    await file.download_to_drive(img_path)
+📌 **القرار:** {decision}
 
-    analysis = analyze_chart(img_path)
-    await update.message.reply_text(analysis)
+⏱ **أفضل مدة للصفقة:** 1 – 3 دقائق
+"""
+    return msg
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔥 مرحباً! أرسل صورة شارت وسأحللها لك باحتراف.")
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo = await update.message.photo[-1].get_file()
+    image_path = "chart.jpg"
+    await photo.download_to_drive(image_path)
 
-def main():
+    msg = await start_analysis(image_path)
+    await update.message.reply_text(msg)
+
+async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_image))
-    logger.info("🔥 البوت شغال…")
-    app.run_polling()
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    print("🔥 BOT IS RUNNING...")
+    await app.run_polling()
 
-if __name__ == "__main__":
-    main()
+import asyncio
+asyncio.run(main())
