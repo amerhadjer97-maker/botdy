@@ -1,52 +1,60 @@
 # -*- coding: utf-8 -*-
-import sys
 import os
-os.environ["PYTHONIOENCODING"] = "utf-8"
-sys.stdout.reconfigure(encoding='utf-8')
-sys.stderr.reconfigure(encoding='utf-8')
-
-import telebot
-import cv2
-import numpy as np
+import base64
+import requests
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
 
 BOT_TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
-bot = telebot.TeleBot(BOT_TOKEN)
 
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.reply_to(message, "🔥 أهلاً! أرسل لي أي صورة شارت وسأحللها لك الآن!")
 
-@bot.message_handler(content_types=['photo'])
-def handle_image(message):
-    bot.reply_to(message, "⏳ جاري تحليل الصورة...")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋🔥 أهلاً! أرسل لي أي صورة وسأحللها لك باحترافية!")
+
+
+async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("⏳ جاري تحليل الصورة...")
+
+    photo = update.message.photo[-1]
+    file = await photo.get_file()
+    img_path = "image.jpg"
+    await file.download_to_drive(img_path)
 
     try:
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded = bot.download_file(file_info.file_path)
+        # تحويل الصورة إلى Base64
+        with open(img_path, "rb") as img:
+            img_base64 = base64.b64encode(img.read()).decode("utf-8")
 
-        img_path = "chart.jpg"
-        with open(img_path, 'wb') as new_file:
-            new_file.write(downloaded)
+        # طلب API مجاني
+        response = requests.post(
+            "https://api.gemini.amerhadjer.me/analyze",
+            json={"image": img_base64}
+        )
 
-        img = cv2.imread(img_path)
+        if response.status_code != 200:
+            await update.message.reply_text("❌ خطأ من السيرفر المجاني!")
+            return
 
-        if img is None:
-            raise Exception("الصورة غير صالحة")
+        result = response.json().get("result", "❌ لم أستطع فهم الصورة.")
 
-        # تحليل بسيط: استخراج الاتجاه العام من الصورة
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-
-        avg_intensity = np.mean(edges)
-
-        if avg_intensity > 30:
-            trend = "📉 الاتجاه غالباً هابط"
-        else:
-            trend = "📈 الاتجاه غالباً صاعد"
-
-        bot.reply_to(message, f"📊 **النتيجة:**\n{trend}")
+        await update.message.reply_text(
+            f"📊 **النتيجة:**\n\n{result}",
+            parse_mode="Markdown"
+        )
 
     except Exception as e:
-        bot.reply_to(message, f"❌ حدث خطأ أثناء تحليل الصورة:\n{e}")
+        await update.message.reply_text(f"❌ حدث خطأ أثناء تحليل الصورة:\n{str(e)}")
 
-bot.infinity_polling()
+
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_image))
+
+    print("🚀 البوت يعمل الآن بدون مشاكل UTF-8…")
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
