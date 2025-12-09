@@ -5,7 +5,7 @@ from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
 BOT_TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
 
-REPLICATE_API_TOKEN = "ضع_توكن_ريبيكيت_هنا"
+REPLICATE_API_TOKEN = "r8_ضع_توكن_ريبيكيت_الخاص_بك_هنا"
 
 def analyze_image(img_bytes):
     url = "https://api.replicate.com/v1/predictions"
