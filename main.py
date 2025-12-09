@@ -1,117 +1,64 @@
-import telebot
-from flask import Flask, request
-import cv2
-import numpy as np
-import pytesseract
-from PIL import Image
+import os
+import requests
+from telegram import Update
+from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
-# ============================
-#     TELEGRAM CONFIG
-# ============================
-TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
-bot = telebot.TeleBot(TOKEN)
-app = Flask(__name__)
+BOT_TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
 
-# ============================
-#   IMAGE ANALYSIS FUNCTION
-# ============================
+REPLICATE_API_TOKEN = "ضع_توكن_ريبيكيت_هنا"
 
-def analyze_image(image_path):
-    try:
-        img = cv2.imread(image_path)
+def analyze_image(img_bytes):
+    url = "https://api.replicate.com/v1/predictions"
+    headers = {
+        "Authorization": f"Token {REPLICATE_API_TOKEN}",
+        "Content-Type": "application/json"
+    }
 
-        if img is None:
-            return "⚠️ لم أتمكن من قراءة الصورة!"
+    files = {"file": ("image.jpg", img_bytes, "image/jpeg")}
+    upload_res = requests.post("https://api.replicate.com/v1/files",
+                               headers={"Authorization": f"Token {REPLICATE_API_TOKEN}"},
+                               files=files).json()
 
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    image_url = upload_res["urls"]["get"]
 
-        text = pytesseract.image_to_string(gray, lang="eng")
+    payload = {
+        "version": "llava-13b",
+        "input": {
+            "image": image_url,
+            "prompt": "Provide a detailed analysis of this trading chart."
+        }
+    }
 
-        analysis = ""
+    res = requests.post(url, json=payload, headers=headers).json()
+    prediction_url = res["urls"]["get"]
 
-        edges = cv2.Canny(gray, 50, 150)
-        edge_sum = np.sum(edges)
+    while True:
+        final = requests.get(prediction_url, headers=headers).json()
+        if final["status"] == "succeeded":
+            return final["output"]
+        elif final["status"] == "failed":
+            return "❌ حدث خطأ أثناء التحليل"
+            
 
-        if edge_sum > 1500000:
-            trend = "📉 الترند هابط بقوة"
-        elif edge_sum > 900000:
-            trend = "📈 الترند صاعد"
-        else:
-            trend = "⚠️ السوق جانبي"
+def handle_image(update: Update, context: CallbackContext):
+    file = update.message.photo[-1].get_file()
+    img_bytes = file.download_as_bytearray()
 
-        analysis += trend + "\n\n"
+    update.message.reply_text("⏳ جاري تحليل الصورة...")
 
-        brightness = np.mean(gray)
-
-        if brightness > 160:
-            analysis += "🔆 الشموع فاتحة… ربما صعود قوي\n"
-        elif brightness < 80:
-            analysis += "🌑 الشموع داكنة… ضغط بيعي\n"
-        else:
-            analysis += "🌓 السوق متوازن\n"
-
-        density = int(edge_sum / 100000)
-        analysis += f"📊 قوة الحركة: {density}/20\n"
-
-        result = (
-            "🔍 **تحليل الصورة:**\n\n"
-            f"{analysis}\n"
-            "📄 **النص المستخرج من الصورة:**\n"
-            f"```\n{text}\n```"
-        )
-
-        return result
-
-    except Exception as e:
-        return f"❌ خطأ أثناء تحليل الصورة: {str(e)}"
+    result = analyze_image(img_bytes)
+    update.message.reply_text(f"📊 نتيجة التحليل:\n\n{result}")
 
 
-# ============================
-#     TELEGRAM HANDLERS
-# ============================
+def main():
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-@bot.message_handler(commands=['start'])
-def start_msg(message):
-    bot.reply_to(message,
-        "🔥 أهلاً بك! أرسل لي أي صورة وسأعطيك تحليل احترافي مباشرة!\n"
-        "يدعم: شارت – صفقات – شموع – أرقام – كتابة."
-    )
+    dp.add_handler(MessageHandler(Filters.photo, handle_image))
 
-@bot.message_handler(content_types=['photo'])
-def photo_handler(message):
-    try:
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded = bot.download_file(file_info.file_path)
+    updater.start_polling()
+    updater.idle()
 
-        img_path = "input_img.jpg"
-        with open(img_path, "wb") as f:
-            f.write(downloaded)
-
-        bot.reply_to(message, "⏳ جاري تحليل الصورة…")
-
-        result = analyze_image(img_path)
-
-        bot.reply_to(message, result)
-
-    except Exception as e:
-        bot.reply_to(message, f"❌ حدث خطأ: {str(e)}")
-
-
-# ============================
-#        FLASK SERVER
-# ============================
-
-@app.route(f"/{TOKEN}", methods=['POST'])
-def webhook():
-    update = request.get_data().decode("utf-8")
-    bot.process_new_updates([telebot.types.Update.de_json(update)])
-    return "OK", 200
-
-@app.route("/", methods=["GET"])
-def home():
-    return "🔥 Bot is running without OpenAI!"
-
-# ============================
 
 if __name__ == "__main__":
-    bot.infinity_polling()
+    main()
