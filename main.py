@@ -1,63 +1,56 @@
 import os
-import requests
+import replicate
 from telegram import Update
-from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
+# -----------------------------
+# 🔥 هنا وضعنا التوكن الخاص بك
+# -----------------------------
 BOT_TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
 
-REPLICATE_API_TOKEN = "r8_ضع_توكن_ريبيكيت_الخاص_بك_هنا"
+# ضع هنا توكن ريبيكيت الخاص بك
+REPLICATE_API_TOKEN = "ضع_توكن_Replicate_هنا"
 
-def analyze_image(img_bytes):
-    url = "https://api.replicate.com/v1/predictions"
-    headers = {
-        "Authorization": f"Token {REPLICATE_API_TOKEN}",
-        "Content-Type": "application/json"
-    }
+os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_TOKEN
 
-    files = {"file": ("image.jpg", img_bytes, "image/jpeg")}
-    upload_res = requests.post("https://api.replicate.com/v1/files",
-                               headers={"Authorization": f"Token {REPLICATE_API_TOKEN}"},
-                               files=files).json()
 
-    image_url = upload_res["urls"]["get"]
+async def analyze_image(image_path):
+    try:
+        output = replicate.run(
+            "yorickvp/llava-13b",
+            input={"image": open(image_path, "rb"), "prompt": "Describe this image in detail."}
+        )
+        return output
+    except Exception as e:
+        return f"❌ خطأ أثناء تحليل الصورة: {str(e)}"
 
-    payload = {
-        "version": "llava-13b",
-        "input": {
-            "image": image_url,
-            "prompt": "Provide a detailed analysis of this trading chart."
-        }
-    }
 
-    res = requests.post(url, json=payload, headers=headers).json()
-    prediction_url = res["urls"]["get"]
+async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    chat_id = message.chat_id
 
-    while True:
-        final = requests.get(prediction_url, headers=headers).json()
-        if final["status"] == "succeeded":
-            return final["output"]
-        elif final["status"] == "failed":
-            return "❌ حدث خطأ أثناء التحليل"
-            
+    await message.reply_text("⏳ جاري تحليل الصورة...")
 
-def handle_image(update: Update, context: CallbackContext):
-    file = update.message.photo[-1].get_file()
-    img_bytes = file.download_as_bytearray()
+    file = await message.photo[-1].get_file()
+    image_path = "received_image.jpg"
+    await file.download_to_drive(image_path)
 
-    update.message.reply_text("⏳ جاري تحليل الصورة...")
+    result = await analyze_image(image_path)
+    await message.reply_text(f"📊 **النتيجة:**\n{result}")
 
-    result = analyze_image(img_bytes)
-    update.message.reply_text(f"📊 نتيجة التحليل:\n\n{result}")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 أهلاً! أرسل لي أي صورة وسأحللها لك 🔍🔥")
 
 
 def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    dp.add_handler(MessageHandler(Filters.photo, handle_image))
+    app.add_handler(MessageHandler(filters.COMMAND, start))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_image))
 
-    updater.start_polling()
-    updater.idle()
+    print("🚀 البوت يعمل الآن!")
+    app.run_polling()
 
 
 if __name__ == "__main__":
