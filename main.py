@@ -1,48 +1,46 @@
 # -*- coding: utf-8 -*-
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-sys.stderr.reconfigure(encoding='utf-8')
-
 import logging
-import easyocr
-from telegram.ext import Updater, MessageHandler, Filters, CommandHandler
+from telegram.ext import Updater, MessageHandler, Filters, CommandHandler, CallbackContext
 from telegram import Update
-from telegram.ext import CallbackContext
+import easyocr
+import os
 
 BOT_TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
 
-# تفعيل اللوج
+# لوق المعلومات
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
-# قارئ النصوص من الصور
-reader = easyocr.Reader(['ar', 'en'])
 
 def start(update: Update, context: CallbackContext):
-    update.message.reply_text("⚡ أهلاً! أرسل لي أي صورة وسأقوم بتحليلها مباشرة.")
+    update.message.reply_text("🔥📸 أهلاً! أرسل أي صورة وسأقوم بتحليل النص الموجود بداخلها فوراً!")
+
 
 def analyze_image(path):
     try:
-        result = reader.readtext(path, detail=1)
-        text = "\n".join([item[1] for item in result])
-        
-        if text.strip() == "":
-            return "❗ لم أستطع استخراج أي معلومات من الصورة."
+        reader = easyocr.Reader(['ar', 'en'])
+        result = reader.readtext(path)
 
-        return f"📊 **تحليل الصورة:**\n\n{text}"
+        if not result:
+            return "❌ لم أستطع استخراج أي نص من الصورة."
+
+        text = "\n".join([item[1] for item in result])
+
+        return f"📊 *تحليل الصورة:* \n\n{text}"
 
     except Exception as e:
-        return f"❌ خطأ أثناء تحليل الصورة:\n{str(e)}"
+        return f"❌ خطأ أثناء التحليل:\n{str(e)}"
+
 
 def handle_photo(update: Update, context: CallbackContext):
     update.message.reply_text("⏳ جاري تحليل الصورة...")
 
-    photo = update.message.photo[-1].get_file()
+    file = update.message.photo[-1].get_file()
     path = "image.jpg"
-    photo.download(path)
+    file.download(path)
 
-    analysis = analyze_image(path)
+    response = analyze_image(path)
+    update.message.reply_text(response, parse_mode="Markdown")
 
-    update.message.reply_text(analysis, parse_mode="HTML")
 
 def main():
     updater = Updater(BOT_TOKEN, use_context=True)
@@ -51,8 +49,11 @@ def main():
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.photo, handle_photo))
 
+    logging.info("🚀 البوت يعمل الآن بدون API!")
+
     updater.start_polling()
     updater.idle()
+
 
 if __name__ == "__main__":
     main()
