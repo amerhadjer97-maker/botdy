@@ -8,9 +8,8 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTyp
 # -----------------------------
 BOT_TOKEN = "7996482415:AAHEPHHVflgsuDJkG-LUyfB2WCJRtnWZbZE"
 
-# ضع هنا توكن ريبيكيت الحقيقي مثل:
-# r8_abcd1234xyz
-REPLICATE_API_TOKEN = "r8_اكتب_توكنك_هنا"
+# ⭐ ضع هنا توكن ريبيكيت الحقيقي
+REPLICATE_API_TOKEN = "r8_اكتب_توكنك_الحقيقي_هنا"
 
 os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_TOKEN
 
@@ -21,13 +20,13 @@ os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_TOKEN
 async def analyze_image(image_path):
     try:
         output = replicate.run(
-            "yorickvp/llava-13b",
+            "yorickvp/llava-13b:8e56c1a7fbcbf6818d3cef5ff8eaf0da75793ce17e3a92c65abec8e5c4ffdbb0",
             input={
                 "image": open(image_path, "rb"),
-                "prompt": "Analyze this trading chart in detail: trend direction, entry points, risk, signals, and overall prediction."
+                "prompt": "Analyze this trading chart: trend, entry point, candle psychology, risk level, prediction, and recommendation."
             }
         )
-        return output
+        return "".join(output)
     except Exception as e:
         return f"❌ خطأ أثناء تحليل الصورة: {str(e)}"
 
@@ -45,7 +44,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await file.download_to_drive(image_path)
 
     result = await analyze_image(image_path)
-    await message.reply_text(f"📊 **النتيجة:**\n{result}")
+    await message.reply_text(f"📊 **النتيجة:**\n\n{result}")
 
 
 # -----------------------------
@@ -61,7 +60,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    app.add_handler(MessageHandler(filters.COMMAND, start))
+    app.add_handler(MessageHandler(filters.Regex("^/start$"), start))
     app.add_handler(MessageHandler(filters.PHOTO, handle_image))
 
     print("🚀 البوت يعمل الآن!")
