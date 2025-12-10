@@ -1,47 +1,43 @@
-from pyrogram import Client, filters
-
-# ---------------- إعدادات البوت ----------------
-API_ID = 123456   # ضع API_ID الخاص بك
-API_HASH = "api_hash_here"   # ضع API_HASH الخاص بك
-BOT_TOKEN = "7996482415:AAHS2MmIVnx5-Z4w5ORcntmTXDg16u8JTqs"
-
-app = Client(
-    "tradbot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN
-)
-
-# ---------------- دالة تحليل الصورة ----------------
-def analyze_image(image_path):
-    # لاحقاً نضع تحليل حقيقي
-    return {
-        "sell_price": "1495.20",
-        "sell_reason": "مؤشر RSI عالي + شمعة انعكاس",
-        "buy_price": "1492.50",
-        "buy_reason": "دعم قوي عند هذا المستوى"
-    }
-
-# ---------------- استقبال الصور ----------------
-@app.on_message(filters.photo)
-def handle_photo(client, message):
-
-    file_path = client.download_media(message.photo.file_id)
-
-    analysis = analyze_image(file_path)
-
-    reply_text = f"""
-🔎 **تحليل الصورة:**
-مثال تحليل تلقائي. استبدل `analyze_image` باستدعاء نموذج حقيقي.
-
-**- SELL | السعر: {analysis['sell_price']}**
-السبب: {analysis['sell_reason']}
-
-**- BUY | السعر: {analysis['buy_price']}**
-السبب: {analysis['buy_reason']}
-"""
-
-    message.reply_text(reply_text)
-
-# ---------------- تشغيل البوت ----------------
-app.run()
+import telebot  
+from PIL import Image  
+import numpy as np  
+  
+# مفتاح البوت  
+TOKEN = "7996482415:AAHS2MmIVnx5-Z4w5ORcntmTXDg16u8JTqs"  
+bot = telebot.TeleBot(TOKEN)  
+  
+# دالة تحليل الصورة (مؤقتة)  
+def analyze_image(image_path):  
+    # استبدل هذا الجزء بخوارزميات حقيقية لتحليل الرسوم البيانية  
+    # هنا مثال بسيط فقط  
+    result = {  
+        "action": "SELL",  
+        "price": 1495.20,  
+        "reason": "مؤشر RSI عالي + شمعة انعكاس"  
+    }  
+    return result  
+  
+# التعامل مع الصور المرسلة  
+@bot.message_handler(content_types=['photo'])  
+def handle_photo(message):  
+    try:  
+        # الحصول على الصورة من تلغرام  
+        file_info = bot.get_file(message.photo[-1].file_id)  
+        downloaded_file = bot.download_file(file_info.file_path)  
+  
+        # حفظ الصورة محليًا  
+        path = "chart.jpg"  
+        with open(path, "wb") as f:  
+            f.write(downloaded_file)  
+  
+        # تحليل الصورة  
+        result = analyze_image(path)  
+  
+        # إرسال النتيجة للمستخدم  
+        response = f"🔎 تحليل الصورة:\n" \  
+                   f"- {result['action']} | السعر: {result['price']}\n" \  
+                   f"السبب: {result['reason']}"  
+        bot.reply_to(message, response)  
+    except Exception as e:  
+        bot.reply_to(message, f"⚠️ حدث خطأ أثناء تحليل الصورة: {e}")  
+هل خاذ الكود اضعه في mainpy
