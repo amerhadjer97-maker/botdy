@@ -1,152 +1,47 @@
-import os
-import cv2
-import numpy as np
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-import pytesseract
+from pyrogram import Client, filters
 
+# ---------------- إعدادات البوت ----------------
+API_ID = 123456   # ضع API_ID الخاص بك
+API_HASH = "api_hash_here"   # ضع API_HASH الخاص بك
+BOT_TOKEN = "7996482415:AAHS2MmIVnx5-Z4w5ORcntmTXDg16u8JTqs"
 
-# ================================
-#  ضع التوكن الخاص بك هنا
-# ================================
-TELEGRAM_TOKEN = "7996482415:AAHS2MmIVnx5-Z4w5ORcntmTXDg16u8JTqs"
+app = Client(
+    "tradbot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN
+)
 
-
-
-# ---------------------------------------------------
-# دالة التحليل ULTRA
-# ---------------------------------------------------
+# ---------------- دالة تحليل الصورة ----------------
 def analyze_image(image_path):
-    try:
-        img = cv2.imread(image_path)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # لاحقاً نضع تحليل حقيقي
+    return {
+        "sell_price": "1495.20",
+        "sell_reason": "مؤشر RSI عالي + شمعة انعكاس",
+        "buy_price": "1492.50",
+        "buy_reason": "دعم قوي عند هذا المستوى"
+    }
 
-        # -----------------------------
-        # استخراج السعر من النقطة الزرقاء
-        # -----------------------------
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        lower_blue = np.array([90, 50, 50])
-        upper_blue = np.array([130, 255, 255])
-        mask = cv2.inRange(hsv, lower_blue, upper_blue)
+# ---------------- استقبال الصور ----------------
+@app.on_message(filters.photo)
+def handle_photo(client, message):
 
-        price = "غير واضح"
-        try:
-            text = pytesseract.image_to_string(mask, config='--psm 6')
-            for t in text.split():
-                if t.replace('.', '').isdigit():
-                    price = t
-                    break
-        except:
-            price = "0.0000"
+    file_path = client.download_media(message.photo.file_id)
 
+    analysis = analyze_image(file_path)
 
-        # -----------------------------
-        # تحليل الترند (ZigZag)
-        # -----------------------------
-        zigzag_area = gray[200:800, 0:350]
-        edges = cv2.Canny(zigzag_area, 50, 150)
-        lines = cv2.HoughLinesP(edges, 1, np.pi/180, 30, minLineLength=40, maxLineGap=5)
+    reply_text = f"""
+🔎 **تحليل الصورة:**
+مثال تحليل تلقائي. استبدل `analyze_image` باستدعاء نموذج حقيقي.
 
-        trend = "غير واضح"
-        if lines is not None:
-            for l in lines:
-                x1, y1, x2, y2 = l[0]
-                if y2 < y1:
-                    trend = "صاعد"
-                elif y2 > y1:
-                    trend = "هابط"
+**- SELL | السعر: {analysis['sell_price']}**
+السبب: {analysis['sell_reason']}
 
-
-        # -----------------------------
-        # تحليل الشموع اليمنى
-        # -----------------------------
-        candles = gray[:, 350:650]
-        mean_color = np.mean(candles)
-
-        if mean_color < 110:
-            candle_bias = "هبوط"
-        else:
-            candle_bias = "صعود"
-
-
-        # -----------------------------
-        # قراءات RSI (تقريبية)
-        # -----------------------------
-        rsi_zone = gray[900:1200, :]
-        rsi_value = np.mean(rsi_zone)
-
-        if rsi_value < 90:
-            rsi_signal = "في منطقة بيع قوي"
-        elif rsi_value > 160:
-            rsi_signal = "في منطقة شراء قوي"
-        else:
-            rsi_signal = "محايد"
-
-
-        # -----------------------------
-        # اتخاذ القرار النهائي
-        # -----------------------------
-        if trend == "هابط" or candle_bias == "هبوط":
-            signal = "SELL ⬇️"
-            reason = f"الترند {trend} – الشموع {candle_bias} – RSI {rsi_signal}"
-        else:
-            signal = "BUY ⬆️"
-            reason = f"الترند {trend} – الشموع {candle_bias} – RSI {rsi_signal}"
-
-
-        # -----------------------------
-        # إخراج النتيجة
-        # -----------------------------
-        return f"""
-🔎 نتيجة التحليل:
-
-{signal}
-📊 السعر: {price}
-
-📌 الأسباب:
-• اتجاه الترند: {trend}
-• سلوك الشموع: {candle_bias}
-• مؤشر RSI: {rsi_signal}
+**- BUY | السعر: {analysis['buy_price']}**
+السبب: {analysis['buy_reason']}
 """
 
-    except Exception as e:
-        return f"❌ خطأ أثناء التحليل: {e}"
+    message.reply_text(reply_text)
 
-
-
-# ---------------------------------------------------
-# استقبال الصور من تيليغرام
-# ---------------------------------------------------
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("👋 أرسل لي صورة الشارت وسأحللها لك!")
-
-
-def handle_image(update: Update, context: CallbackContext):
-    photo = update.message.photo[-1]
-    file = photo.get_file()
-    image_path = "received_chart.jpg"
-    file.download(image_path)
-
-    update.message.reply_text("⏳ جاري تحليل الصورة…")
-
-    result = analyze_image(image_path)
-    update.message.reply_text(result)
-
-
-
-# ---------------------------------------------------
-# تشغيل البوت
-# ---------------------------------------------------
-def main():
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.photo, handle_image))
-
-    updater.start_polling()
-    updater.idle()
-
-
-if __name__ == "__main__":
-    main()
+# ---------------- تشغيل البوت ----------------
+app.run()
