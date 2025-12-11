@@ -1,39 +1,58 @@
 import os
 import random
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from flask import Flask, request
+from telegram import Bot, Update
+from telegram.ext import Dispatcher, MessageHandler, filters, CallbackContext
 
 TOKEN = "7996482415:AAHS2MmIVnx5-Z4w5ORcntmTXDg16u8JTqs"
+bot = Bot(token=TOKEN)
 
-# --- دالة تحليل الصورة ---
+app = Flask(__name__)
+dispatcher = Dispatcher(bot, None, workers=0)
+
+# ---------------------------
+#   دالة تحليل الصورة
+# ---------------------------
 def analyze_image(path):
-    # تحليل تجريبي يعتمد على random (للتجربة فقط)
     options = [
         ("BUY", "📈 السعر في منطقة دعم مع ارتداد"),
         ("SELL", "📉 السعر عند مقاومة واحتمال هبوط"),
         ("BUY", "📈 RSI منخفض + شموع انعكاسية"),
         ("SELL", "📉 RSI عالي + ضعف في الصعود"),
     ]
-    choice = random.choice(options)
-    signal, reason = choice
+    signal, reason = random.choice(options)
     return f"🔎 نتيجة التحليل:\nالعملية: {signal}\nالسبب: {reason}"
 
-# --- استقبال الصور ---
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ---------------------------
+#   استقبال الصور
+# ---------------------------
+def handle_photo(update: Update, context: CallbackContext):
     photo = update.message.photo[-1]
-    file = await photo.get_file()
+    file = bot.get_file(photo.file_id)
     path = "image.jpg"
-    await file.download_to_drive(path)
+    file.download(path)
 
     result = analyze_image(path)
-    await update.message.reply_text(result)
+    bot.send_message(chat_id=update.message.chat_id, text=result)
 
-# --- تشغيل البوت ---
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    print("Bot is running...")
-    app.run_polling()
+# تسجيل الهاندلر
+dispatcher.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+
+# ---------------------------
+#   نقطة استقبال الويب هوك
+# ---------------------------
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return "OK", 200
+
+# ---------------------------
+#   اختبار العمل على المتصفح
+# ---------------------------
+@app.route("/")
+def home():
+    return "Bot is running via Render!"
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
