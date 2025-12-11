@@ -1,4 +1,5 @@
 from flask import Flask, request
+import os
 import telegram
 from telegram import Update
 from telegram.ext import Dispatcher, MessageHandler, Filters, CommandHandler
@@ -9,7 +10,7 @@ bot = telegram.Bot(token=TOKEN)
 app = Flask(__name__)
 
 # ---------------------------
-# تحليل جاهز
+# 🔥 التحليل الجاهز
 # ---------------------------
 def generate_fake_analysis():
     return (
@@ -32,14 +33,14 @@ def handle_image(update, context):
     update.message.reply_text(analysis)
 
 # ---------------------------
-# إعداد Dispatcher
+# Dispatcher صحيح 100%
 # ---------------------------
-dispatcher = Dispatcher(bot, None, workers=0)
+dispatcher = Dispatcher(bot, update_queue=None, workers=4, use_context=True)
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
 
 # ---------------------------
-# webhook endpoint
+# Webhook endpoint
 # ---------------------------
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
@@ -52,5 +53,9 @@ def webhook():
 def home():
     return "Bot is running!"
 
+# ---------------------------
+# تشغيل السيرفر على Render
+# ---------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
