@@ -1,61 +1,39 @@
-from flask import Flask, request
 import os
-import telegram
+import random
 from telegram import Update
-from telegram.ext import Dispatcher, MessageHandler, Filters, CommandHandler
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 TOKEN = "7996482415:AAHS2MmIVnx5-Z4w5ORcntmTXDg16u8JTqs"
-bot = telegram.Bot(token=TOKEN)
 
-app = Flask(__name__)
+# --- دالة تحليل الصورة ---
+def analyze_image(path):
+    # تحليل تجريبي يعتمد على random (للتجربة فقط)
+    options = [
+        ("BUY", "📈 السعر في منطقة دعم مع ارتداد"),
+        ("SELL", "📉 السعر عند مقاومة واحتمال هبوط"),
+        ("BUY", "📈 RSI منخفض + شموع انعكاسية"),
+        ("SELL", "📉 RSI عالي + ضعف في الصعود"),
+    ]
+    choice = random.choice(options)
+    signal, reason = choice
+    return f"🔎 نتيجة التحليل:\nالعملية: {signal}\nالسبب: {reason}"
 
-# ---------------------------
-# 🔥 التحليل الجاهز
-# ---------------------------
-def generate_fake_analysis():
-    return (
-        "🔎 تحليل الصورة:\n"
-        "- SELL | السعر: 1495.20\n"
-        "  السبب: مؤشر RSI عالي + شمعة انعكاس\n\n"
-        "- BUY | السعر: 1492.50\n"
-        "  السبب: دعم قوي عند هذا المستوى\n"
-    )
+# --- استقبال الصور ---
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo = update.message.photo[-1]
+    file = await photo.get_file()
+    path = "image.jpg"
+    await file.download_to_drive(path)
 
-# ---------------------------
-# الهاندلرز
-# ---------------------------
-def start(update, context):
-    update.message.reply_text("👋 أهلاً! أرسل صورة وسأحللها لك فوراً.")
+    result = analyze_image(path)
+    await update.message.reply_text(result)
 
-def handle_image(update, context):
-    update.message.reply_text("⏳ جارٍ تحليل الصورة...")
-    analysis = generate_fake_analysis()
-    update.message.reply_text(analysis)
+# --- تشغيل البوت ---
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    print("Bot is running...")
+    app.run_polling()
 
-# ---------------------------
-# Dispatcher صحيح 100%
-# ---------------------------
-dispatcher = Dispatcher(bot, update_queue=None, workers=4, use_context=True)
-dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
-
-# ---------------------------
-# Webhook endpoint
-# ---------------------------
-@app.route(f"/{TOKEN}", methods=["POST"])
-def webhook():
-    data = request.get_json(force=True)
-    update = Update.de_json(data, bot)
-    dispatcher.process_update(update)
-    return "OK"
-
-@app.route("/")
-def home():
-    return "Bot is running!"
-
-# ---------------------------
-# تشغيل السيرفر على Render
-# ---------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    main()
