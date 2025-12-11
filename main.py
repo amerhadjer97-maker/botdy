@@ -1,55 +1,56 @@
-import cv2
-import numpy as np
+from flask import Flask, request
+import telegram
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Dispatcher, MessageHandler, Filters, CommandHandler
 
+TOKEN = "7996482415:AAHS2MmIVnx5-Z4w5ORcntmTXDg16u8JTqs"
+bot = telegram.Bot(token=TOKEN)
 
-# ضع التوكن الخاص بك هنا
-TELEGRAM_TOKEN = "7996482415:AAHS2MmIVnx5-Z4w5ORcntmTXDg16u8JTqs"
-7996482415:
+app = Flask(__name__)
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text(
-        "👋 أهلاً! أرسل لي أي صورة شارت وسأعطيك تحليل جاهز + مناطق الدخول."
-    )
-
-
-# ---------------------------------------------------------
-# 🔥 تحليل جاهز بالشكل الذي تريده
-# ---------------------------------------------------------
+# ---------------------------
+# تحليل جاهز
+# ---------------------------
 def generate_fake_analysis():
-    analysis = (
-        "🔎 **تحليل الصورة:**\n"
-        "مثال تحليل تلقائي. (تحليل تجريبي الآن)\n\n"
-        "- **SELL** | السعر: 1495.20  \n"
-        "  **السبب:** مؤشر RSI عالي + شمعة انعكاس\n\n"
-        "- **BUY** | السعر: 1492.50  \n"
-        "  **السبب:** دعم قوي عند هذا المستوى\n"
+    return (
+        "🔎 تحليل الصورة:\n"
+        "- SELL | السعر: 1495.20\n"
+        "  السبب: مؤشر RSI عالي + شمعة انعكاس\n\n"
+        "- BUY | السعر: 1492.50\n"
+        "  السبب: دعم قوي عند هذا المستوى\n"
     )
-    return analysis
 
+# ---------------------------
+# الهاندلرز
+# ---------------------------
+def start(update, context):
+    update.message.reply_text("👋 أهلاً! أرسل صورة وسأحللها لك فوراً.")
 
-def handle_image(update: Update, context: CallbackContext):
-    file = update.message.photo[-1].get_file()
-    file.download("received.png")
-
+def handle_image(update, context):
     update.message.reply_text("⏳ جارٍ تحليل الصورة...")
-
-    # استدعاء التحليل الجديد
     analysis = generate_fake_analysis()
     update.message.reply_text(analysis)
 
+# ---------------------------
+# إعداد Dispatcher
+# ---------------------------
+dispatcher = Dispatcher(bot, None, workers=0)
+dispatcher.add_handler(CommandHandler("start", start))
+dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
 
-def main():
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    dp = updater.dispatcher
+# ---------------------------
+# webhook endpoint
+# ---------------------------
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    data = request.get_json(force=True)
+    update = Update.de_json(data, bot)
+    dispatcher.process_update(update)
+    return "OK"
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.photo, handle_image))
-
-    updater.start_polling()
-    updater.idle()
-
+@app.route("/")
+def home():
+    return "Bot is running!"
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=10000)
