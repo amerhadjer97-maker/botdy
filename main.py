@@ -1,45 +1,72 @@
-from telegram.ext import Application, MessageHandler, CommandHandler, filters
-from telegram import Update
 from flask import Flask, request
+from telegram import Bot, Update
+import cv2
+import numpy as np
+import requests
+import os
 
-BOT_TOKEN = "8547305082:AAFltNensKHmevSsvs_I4oNTryOgOFrI1iE"
+TOKEN = "8566367254:AAGSL1TgX9u-5LN4EUBGdU7Tf2rcGbShKN0"
+bot = Bot(token=TOKEN)
+app = Flask(__name__)
 
-app_flask = Flask(__name__)
-application = Application.builder().token(BOT_TOKEN).build()
+@app.route("/")
+def home():
+    return "Bot is running ✅"
 
-# رسالة البداية
-async def start(update: Update, context):
-    await update.message.reply_text("مرحبًا 👋\nأرسل صورة الشارت لتحليلها 📸")
+def analyze_chart(image_path):
+    img = cv2.imread(image_path, 0)
 
-def analyze_image(image_path):
-    return """
-🔎 تحليل الصورة:
+    if img is None:
+        return "❌ لم أستطع قراءة الصورة"
 
-- SELL | السعر: 1495.20
-  السبب: مؤشر RSI عالي + شمعة انعكاس
+    # حساب الاتجاه العام (بسيط وفعال)
+    h, w = img.shape
+    left = np.mean(img[:, :w//3])
+    right = np.mean(img[:, 2*w//3:])
 
-- BUY | السعر: 1492.50
-  السبب: دعم قوي عند هذا المستوى
-"""
+    if right > left:
+        return "📈 إشارة: شراء (BUY)"
+    else:
+        return "📉 إشارة: بيع (SELL)"
 
-async def handle_image(update: Update, context):
-    photo = update.message.photo[-1]
-    file = await photo.get_file()
-    await file.download_to_drive("chart.jpg")
-
-    analysis = analyze_image("chart.jpg")
-    await update.message.reply_text(analysis)
-
-application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.PHOTO, handle_image))
-
-@app_flask.route("/webhook", methods=["POST"])
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    application.update_queue.put_nowait(update)
+    update = Update.de_json(request.get_json(force=True), bot)
+
+    # /start
+    if update.message and update.message.text == "/start":
+        bot.send_message(
+            chat_id=update.message.chat.id,
+            text=(
+                "👋 مرحبا\n\n"
+                "📸 أرسل صورة الشارت\n"
+                "📊 وسأعطيك: شراء 📈 أو بيع 📉"
+            )
+        )
+
+    # صورة
+    elif update.message and update.message.photo:
+        chat_id = update.message.chat.id
+        file_id = update.message.photo[-1].file_id
+        file = bot.get_file(file_id)
+
+        img_url = file.file_path
+        img_data = requests.get(img_url).content
+
+        img_path = "chart.jpg"
+        with open(img_path, "wb") as f:
+            f.write(img_data)
+
+        result = analyze_chart(img_path)
+
+        bot.send_message(
+            chat_id=chat_id,
+            text=f"🧠 تحليل الشارت:\n{result}"
+        )
+
+        os.remove(img_path)
+
     return "ok"
 
 if __name__ == "__main__":
-    application.initialize()
-    application.start()
-    app_flask.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=5000)
