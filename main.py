@@ -1,6 +1,6 @@
 from telegram.ext import Application, MessageHandler, CommandHandler, filters
 
-BOT_TOKEN = "8566367254:AAGdkD0DB2vvORuGVOeUU6yh6BcacK__1eI"
+BOT_TOKEN = "8547305082:AAFltNensKHmevSsvs_I4oNTryOgOFrI1iE"
 
 # رسالة البداية
 async def start(update, context):
