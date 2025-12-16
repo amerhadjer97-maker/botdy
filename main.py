@@ -5,9 +5,10 @@ from telegram import Bot, Update
 from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters
 
 TOKEN = os.environ.get("BOT_TOKEN")
-bot = Bot(token=TOKEN)
 
+bot = Bot(token=TOKEN)
 app = Flask(__name__)
+
 dispatcher = Dispatcher(bot, None, workers=0)
 
 def analyze_image():
@@ -25,7 +26,8 @@ def start(update, context):
 
 def handle_image(update, context):
     update.message.reply_text("⏳ جاري تحليل الصورة...")
-    update.message.reply_text(analyze_image())
+    result = analyze_image()
+    update.message.reply_text(result)
 
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
@@ -34,8 +36,11 @@ dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
     dispatcher.process_update(update)
-    return "ok", 200
+    return "ok"
 
 @app.route("/")
 def home():
     return "Bot is running ✅"
+
+if __name__ == "__main__":
+    app.run()
