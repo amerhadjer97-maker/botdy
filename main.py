@@ -9,7 +9,7 @@ TOKEN = os.environ.get("BOT_TOKEN")
 bot = Bot(token=TOKEN)
 app = Flask(__name__)
 
-dispatcher = Dispatcher(bot, None, workers=0)
+dispatcher = Dispatcher(bot, None, workers=0, use_context=True)
 
 def analyze_image():
     choices = [
@@ -26,8 +26,7 @@ def start(update, context):
 
 def handle_image(update, context):
     update.message.reply_text("⏳ جاري تحليل الصورة...")
-    result = analyze_image()
-    update.message.reply_text(result)
+    update.message.reply_text(analyze_image())
 
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
@@ -41,6 +40,3 @@ def webhook():
 @app.route("/")
 def home():
     return "Bot is running ✅"
-
-if __name__ == "__main__":
-    app.run()
