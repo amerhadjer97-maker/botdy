@@ -1,5 +1,7 @@
-import os
+aimport os
+import asyncio
 from flask import Flask, request
+
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -10,14 +12,17 @@ from telegram.ext import (
 )
 
 # =====================
-# TOKEN (مباشر)
+# TOKEN من Environment
 # =====================
-TOKEN = "8547305082:AAFltNensKHmevSsvs_I4oNTryOgOFrI1iE"
+TOKEN = os.environ.get("8547305082:AAFltNensKHmevSsvs_I4oNTryOgOFrI1iE")
 
+# =====================
+# Flask App
+# =====================
 app = Flask(__name__)
 
 # =====================
-# إنشاء Application
+# Telegram Application
 # =====================
 application = ApplicationBuilder().token(TOKEN).build()
 
@@ -25,7 +30,11 @@ application = ApplicationBuilder().token(TOKEN).build()
 # تحليل الصورة (تجريبي)
 # =====================
 def analyze_image():
-    return "📊 النتيجة: شراء (BUY)\n💰 السعر: 1.2345\n⏱ المدة: 1 دقيقة"
+    return (
+        "📊 النتيجة: شراء (BUY)\n"
+        "💰 السعر: 1.2345\n"
+        "⏱ المدة: 1 دقيقة"
+    )
 
 # =====================
 # /start
@@ -54,9 +63,14 @@ application.add_handler(MessageHandler(filters.PHOTO, handle_image))
 # Webhook
 # =====================
 @app.route("/webhook", methods=["POST"])
-async def webhook():
+def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
-    await application.process_update(update)
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(application.process_update(update))
+    loop.close()
+
     return "ok"
 
 # =====================
@@ -67,7 +81,7 @@ def home():
     return "Bot is running ✅"
 
 # =====================
-# تشغيل
+# تشغيل محلي (Render يستخدم gunicorn)
 # =====================
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=10000)
