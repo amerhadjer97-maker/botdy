@@ -1,4 +1,3 @@
-import os
 import asyncio
 from flask import Flask, request
 
@@ -12,9 +11,9 @@ from telegram.ext import (
 )
 
 # =====================
-# TOKEN من Environment
+# TOKEN (مباشرة)
 # =====================
-TOKEN = os.environ.get("8547305082:AAFltNensKHmevSsvs_I4oNTryOgOFrI1iE")
+TOKEN = "8547305082:AAFltNensKHmevSsvs_I4oNTryOgOFrI1iE"
 
 # =====================
 # Flask App
@@ -66,12 +65,9 @@ application.add_handler(MessageHandler(filters.PHOTO, handle_image))
 def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(application.process_update(update))
-    loop.close()
+    asyncio.run(application.process_update(update))
 
-    return "ok"
+    return "ok", 200
 
 # =====================
 # الصفحة الرئيسية
@@ -79,9 +75,3 @@ def webhook():
 @app.route("/")
 def home():
     return "Bot is running ✅"
-
-# =====================
-# تشغيل محلي (Render يستخدم gunicorn)
-# =====================
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
