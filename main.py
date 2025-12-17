@@ -3,15 +3,16 @@ from flask import Flask, request
 
 from telegram import Update
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     CommandHandler,
     MessageHandler,
     ContextTypes,
-    filters
+    filters,
 )
 
 # =====================
-# TOKEN (مباشرة)
+# TOKEN (مباشر)
 # =====================
 TOKEN = "7996482415:AAFhRRnmu7Fr41zkAa9OHuKntWMeqOwqRaI"
 
@@ -23,7 +24,7 @@ app = Flask(__name__)
 # =====================
 # Telegram Application
 # =====================
-application = ApplicationBuilder().token(TOKEN).build()
+application: Application = ApplicationBuilder().token(TOKEN).build()
 
 # =====================
 # تحليل الصورة (تجريبي)
@@ -62,11 +63,9 @@ application.add_handler(MessageHandler(filters.PHOTO, handle_image))
 # Webhook
 # =====================
 @app.route("/webhook", methods=["POST"])
-def webhook():
+async def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
-
-    asyncio.run(application.process_update(update))
-
+    await application.process_update(update)
     return "ok", 200
 
 # =====================
@@ -75,3 +74,11 @@ def webhook():
 @app.route("/")
 def home():
     return "Bot is running ✅"
+
+# =====================
+# تشغيل التطبيق
+# =====================
+if __name__ == "__main__":
+    application.initialize()
+    application.start()
+    app.run(host="0.0.0.0", port=10000)
