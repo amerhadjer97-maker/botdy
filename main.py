@@ -13,7 +13,7 @@ from telegram.ext import (
 # =====================
 # TOKEN (مباشرة)
 # =====================
-TOKEN = "8547305082:AAFltNensKHmevSsvs_I4oNTryOgOFrI1iE"
+TOKEN = "7996482415:AAFhRRnmu7Fr41zkAa9OHuKntWMeqOwqRaI"
 
 # =====================
 # Flask App
