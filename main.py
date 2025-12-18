@@ -1,10 +1,9 @@
-import os
+TOKENnmu7Fr41zkAa9OHuKntWMeqOwqRaI os
 from flask import Flask, request
 from telegram import Bot
 
-# ======================
-# TOKEN (7996482415:AAFhRRnmu7Fr41zkAa9OHuKntWMeqOwqRaI)
-# ======================
+# ===============AAFhRRnmu7Fr41zkAa8547305082:AAFltNensKHmevSsvs_I4oNTryOgOFrI1iE
+TOKEN======================
 TOKEN = "PUT_YOUR_TELEGRAM_BOT_TOKEN_HERE"
 
 bot = Bot(token=TOKEN)
