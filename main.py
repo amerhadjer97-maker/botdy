@@ -3,7 +3,7 @@ from flask import Flask, request
 from telegram import Bot
 
 # ======================
-# TOKEN (7996482415:AAF9fYTkzY3nyzCldCcBsMRoBr6Kwg27YfM)
+# TOKEN (ضع توكنك هنا)
 # ======================
 TOKEN = "PUT_YOUR_TELEGRAM_BOT_TOKEN_HERE"
 
